@@ -80,3 +80,21 @@ lines(density(mysims[,2]), col='darkgreen')
 
 ###http://glmm.wikidot.com/faq
 
+K <- 5000
+coef_sim <- rmvnorm(K, coef(mod), vcov(mod))
+nwx_frame <- data.frame(x=seq(x_lo, x_hi, (x_hi-x_lo)/100))
+nwx <- model.matrix(~x, data=nwx_frame)
+preds <- as.data.frame(NULL)
+for (k in 1:K) {
+  mu <- exp(nwx %*% coef_sim[k,])
+  preds <- rbind(preds, rpois(length(mu),lambda=mu))
+}
+p_mn <- as.vector(apply(preds, 2, mean))
+p_sd <- as.vector(apply(preds, 2, sd))
+p_lo <- p_mn-p_sd*1.96
+p_hi <- p_mn+p_sd*1.96
+x <- seq(x_lo, x_hi, (x_hi-x_lo)/100)
+plot(mydat$x, mydat$y)
+lines(x, p_mn, lwd=3, col='red')
+lines(x, p_lo, lwd=1, col='red')
+lines(x, p_hi, lwd=1, col='red')
