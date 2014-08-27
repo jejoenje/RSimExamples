@@ -25,11 +25,12 @@ summary(mod)
 nwx <- data.frame(x=seq(x_lo,x_hi,(x_hi-x_lo)/100))
 # Make predictions using predict() with SE's included:
 pred <- predict(mod, newdata=nwx, type='response', se=T)
-# Plot this prediction +/- 2* the reported SE:
+# Plot this prediction "response" +/- 2* the reported SE:
 lines(nwx$x, pred$fit, lwd=2, col='red')
 lines(nwx$x, pred$fit+2*pred$se, lwd=1, col='red', lty='dashed')
 lines(nwx$x, pred$fit-2*pred$se, lwd=1, col='red', lty='dashed')
 # Note that these are very narrow relative to the data variability.
+
 # Now plot the same predicted upper and lower values but using the 95% upper and lower CI
 #  from confint():
 ci <- confint(mod)
@@ -39,6 +40,80 @@ lines(nwx$x, exp(model.matrix(~x, data=nwx) %*% ci[,2]), col='blue')
 ### 
 ### YIKES!!!
 ### 
+
+### So what does confint() do differently to predict()??
+# Compare the SE of parameter estimates reported in summary() with the CI's
+#  produced by confint:
+summary(mod)$coef[,1:2]
+confint(mod)
+# Calculate coefficients +/- z* SE from summary(mod)$coef:
+coef_ci <- function(fit, z=1) {
+  return(cbind(summary(fit)$coefficients[,1]-z*summary(fit)$coefficients[,2], 
+               summary(fit)$coefficients[,1]+z*summary(fit)$coefficients[,2]))
+}
+# So confint gives:
+confint(mod)
+# Expect this to be similar to:
+coef_ci(mod, 1.96)
+# .. bingo.
+
+### Now try to replicate what predict() does:
+predict_jm <- function(fit, xv, z=1) {
+  xvmn <- min(fit$model[,xv])
+  xvmx <- max(fit$model[,xv])
+  xvsq <- seq(xvmn, xvmx, (xvmx-xvmn)/100)
+  xvfr <- data.frame(x=xvsq)
+  nwx_mm <- model.matrix(~x, data=xvfr)
+  liv <- family(fit)$linkinv
+  eta_mn <- nwx_mm %*% coef(fit)
+  eta_lo <- nwx_mm %*% (coef(fit)-z*summary(fit)$coef[,2])
+  eta_hi <- nwx_mm %*% (coef(fit)+z*summary(fit)$coef[,2])
+  return(data.frame(mn=liv(eta_mn),lo=liv(eta_lo),hi=liv(eta_hi)))
+}
+
+pred_jm1 <- predict_jm(mod, 'x', z=1)
+lines(nwx$x, pred_jm1$mn, col='green', lwd=2)
+lines(nwx$x, pred_jm1$lo, col='green', lwd=1, lty='dashed')
+lines(nwx$x, pred_jm1$hi, col='green', lwd=1, lty='dashed')
+
+pred_jm2 <- predict_jm(mod, 'x', z=1.96)
+lines(nwx$x, pred_jm2$mn, col='darkgreen', lwd=2)
+lines(nwx$x, pred_jm2$lo, col='darkgreen', lwd=1, lty='dashed')
+lines(nwx$x, pred_jm2$hi, col='darkgreen', lwd=1, lty='dashed')
+
+### So predict_jm() gives the same fit as using the estimates from confint(), as expected from the
+###  above comparison.
+
+### Question remains, what are the SE's reported from predict()??
+pred <- predict(mod, newdata=nwx, type='response', se=T)
+pred$fit
+plot(mydat$x, mydat$y)
+lines(nwx$x, pred$fit, col='red', lwd=2)
+lines(nwx$x, pred$fit-1.96*pred$se, col='red', lty='dashed')
+lines(nwx$x, pred$fit+1.96*pred$se, col='red', lty='dashed')
+# For these predicted values, the predictions are on the response scale, 
+#  but I can't replicate the SE's:
+# For X values
+c(1,nwx$x[1])
+pred$se[1] # ... is not the same as:
+sqrt(t(c(1,nwx$x[1])) %*% vcov(mod) %*% c(1,nwx$x[1]))
+# So now repeat the above but for all predictions on the link scale:
+pred_lin <- predict(mod, newdata=nwx, se=T)
+pred_lin$se[1] # Now, this is the SAME as:
+sqrt(t(c(1,nwx$x[1])) %*% vcov(mod) %*% c(1,nwx$x[1]))
+lines(nwx$x, exp(pred_lin$fit), col='blue', lwd=2)
+lines(nwx$x, exp(pred_lin$fit+1.96*pred_lin$se), col='blue', lty='dashed')
+lines(nwx$x, exp(pred_lin$fit-1.96*pred_lin$se), col='blue', lty='dashed')
+###
+### Aha, so the SE values returned by predict(..., se=T) are the standard errors of the
+###  predictions. To calculate these, do 
+sqrt(t(c(1,nwx$x[1])) %*% vcov(mod) %*% c(1,nwx$x[1]))
+### but note that the above calculation gives SE on LINK SCALE. I don't know how to change this to
+###  the RESPONSE scale algebraically.
+
+
+### The next question remains, however - why does confint() and the apparently
+###  same procedure in predict_jm() above give such different intervals to predict(..., se=T)???
 
 ### Try simulation-approach from sim()
 library(arm)
@@ -53,6 +128,7 @@ pred2_mn <- apply(preds,2,mean)
 pred2_lo <- apply(preds,2,function(x) quantile(x, probs=c(0.025)))
 pred2_hi <- apply(preds,2,function(x) quantile(x, probs=c(0.975)))
 
+plot(mydat$x, mydat$y)
 lines(nwx$x, pred2_mn, col='darkgreen', lwd=2)
 lines(nwx$x, pred2_lo, col='darkgreen', lwd=2, lty='dotdash')
 lines(nwx$x, pred2_hi, col='darkgreen', lwd=2, lty='dotdash')
@@ -67,6 +143,11 @@ par1 <- rnorm(1000, mean=summary(mod)$coef[1,'Estimate'], sd=summary(mod)$coef[1
 par2 <- rnorm(1000, mean=summary(mod)$coef[2,'Estimate'], sd=summary(mod)$coef[2,'Std. Error'])
 par1_sim <- coef_sim[,1]
 par2_sim <- coef_sim[,2]
+plot(density(par1_sim))
+lines(density(par1),col='red')
+plot(density(par2_sim))
+lines(density(par2),col='red')
+
 ### Very quick 'homebrew' attempt at simulation from MV normal distribution
 ###  with means as the point estimates and co-variance from model vcov.
 library(mvtnorm)
@@ -78,23 +159,165 @@ plot(density(par2))
 lines(density(par2_sim), col='red')
 lines(density(mysims[,2]), col='darkgreen')
 
-###http://glmm.wikidot.com/faq
-
-K <- 5000
-coef_sim <- rmvnorm(K, coef(mod), vcov(mod))
-nwx_frame <- data.frame(x=seq(x_lo, x_hi, (x_hi-x_lo)/100))
-nwx <- model.matrix(~x, data=nwx_frame)
-preds <- as.data.frame(NULL)
-for (k in 1:K) {
-  mu <- exp(nwx %*% coef_sim[k,])
-  preds <- rbind(preds, rpois(length(mu),lambda=mu))
-}
-p_mn <- as.vector(apply(preds, 2, mean))
-p_sd <- as.vector(apply(preds, 2, sd))
-p_lo <- p_mn-p_sd*1.96
-p_hi <- p_mn+p_sd*1.96
-x <- seq(x_lo, x_hi, (x_hi-x_lo)/100)
+### Compare sim() results with simple prediction results:
+par(mfrow=c(1,1))
 plot(mydat$x, mydat$y)
-lines(x, p_mn, lwd=3, col='red')
-lines(x, p_lo, lwd=1, col='red')
-lines(x, p_hi, lwd=1, col='red')
+lines(nwx$x, pred$fit, lwd=2, col='red')                      # predict() fit
+lines(nwx$x, pred$fit+pred$se*1.96, col='red', lty='dashed')  # predict() fit +/- 1.96*SE
+lines(nwx$x, pred$fit-pred$se*1.96, col='red', lty='dashed')  # predict() fit +/- 1.96*SE
+lines(nwx$x, pred2_lo, col='blue', lwd=2, lty='dotdash')      # 95% quantiles of SIM output
+lines(nwx$x, pred2_hi, col='blue', lwd=2, lty='dotdash')      # 95% quantiles of SIM output
+nwx_mm <- model.matrix(~x, data=nwx)
+lines(nwx$x, exp(nwx_mm %*% coef_ci(mod, 1.96)[,1]), col='darkgreen') # Prediction based on +/- confint()
+lines(nwx$x, exp(nwx_mm %*% coef_ci(mod, 1.96)[,2]), col='darkgreen') # Prediction based on +/- confint()
+
+pred_sim <- function(fit, nsims=1000, xv) {
+  coefs <- rmvnorm(nsims, coef(fit), vcov(fit))
+  xmn <- min(model.matrix(fit)[,xv])
+  xmx <- max(model.matrix(fit)[,xv])
+  xdf <- data.frame(x=seq(xmn, xmx, (xmx-xmn)/100))
+  xmm <- model.matrix(~x, data=xdf)
+  eta <- as.data.frame(NULL)
+  for(i in 1:nrow(xmm)) {
+    x_j <- as.vector(NULL)
+    for(j in 1:nsims) {
+      #x_j <- c(x_j, xmm[i,] %*% coefs[j,] + rnorm(1, 0, summary(fit)$dispersion))
+      x_j <- c(x_j, rnorm(1, xmm[i,] %*% coefs[j,], summary(fit)$dispersion))
+    }
+    eta <- rbind(eta, x_j)
+  }
+  return(t(eta))
+}
+
+eta <- pred_sim(mod, nsims=100, 'x')
+lines(nwx$x, exp(apply(eta, 2, mean)), col='purple', lwd=2)
+lines(nwx$x, exp(apply(eta, 2, function(x) quantile(x, probs=c(0.025)))), col='purple')
+lines(nwx$x, exp(apply(eta, 2, function(x) quantile(x, probs=c(0.975)))), col='purple')
+
+### The above doesn't look right and is certainly much bigger than expected based on previous go's.
+### Is this right, and is it a consequence of the variability? Seems strange given the data...
+
+### Try again with different version of pred_sim:
+
+pred_simV2 <- function(fit, nsims=1000, xv) {
+  k <- length(coef(fit)) # Number of parameters estimated. NOTE - MODIFY FOR OTHER MODELS
+  n <- nrow(fit$model)
+  d <- summary(fit)$dispersion          # sigma_hat; estimated residual SD
+  s <- d*sqrt((n-k)/rchisq(nsims, n-k)) # sigma; simulated residual SD
+  xmn <- min(model.matrix(fit)[,xv])
+  xmx <- max(model.matrix(fit)[,xv])
+  xdf <- data.frame(x=seq(xmn, xmx, (xmx-xmn)/100))
+  xmm <- model.matrix(~x, data=xdf)
+  eta <- as.data.frame(NULL)
+  for(i in 1:nrow(xmm)) {
+    x_j <- as.vector(NULL)
+    for(j in 1:nsims) {
+      coefs <- rmvnorm(1, coef(fit), vcov(fit)*s[j]^2)
+      x_j <- c(x_j, (xmm[i,] %*% t(coefs)))
+      #x_j <- c(x_j, xmm[i,] %*% coefs[j,] + rnorm(1, 0, summary(fit)$dispersion))
+      #x_j <- c(x_j, rnorm(1, xmm[i,] %*% coefs[j,], summary(fit)$dispersion))
+    }
+    eta <- rbind(eta, x_j)
+  }
+  return(t(eta))
+}
+
+eta <- pred_simV2(mod, nsims=1000, 'x')
+lines(nwx$x, exp(apply(eta, 2, mean)), col='purple', lwd=2)
+lines(nwx$x, exp(apply(eta, 2, function(x) quantile(x, probs=c(0.025)))), col='purple')
+lines(nwx$x, exp(apply(eta, 2, function(x) quantile(x, probs=c(0.975)))), col='purple')
+
+### So the function pred_simV2() above is pretty much what sim() does in the ARM package.
+
+
+
+### FROM http://glmm.wikidot.com/faq
+# Predictions and/or confidence (or prediction) intervals on predictions
+# 
+# Note that none of the following approaches takes the uncertainty
+# of the random effects parameters into account …
+# 
+# The general recipe for computing predictions from a linear or generalized linear model is to:
+# 
+# -figure out the model matrix X corresponding to the new data;
+# -* matrix-multiply X by the parameter vector β to get the predictions (or linear predictor in the case of GLM(M)s);
+# -extract the variance-covariance matrix of the parameters V
+# -compute XVX′ to get the variance-covariance matrix of the predictions;
+# -extract the diagonal of this matrix to get variances of predictions;
+# -if computing prediction rather than confidence intervals, add the residual variance;
+# -take the square-root of the variances to get the standard deviations (errors) of the predictions;
+# -compute confidence intervals based on a Normal approximation;
+# -for GL(M)Ms, run the confidence interval boundaries (not the standard errors) through the inverse-link function.
+# 
+par(mfrow=c(1,1))
+plot(mydat$x, mydat$y)
+# nwx is model.matrix(~x, data.frame(x=seq(x_lo, x_hi, x_step)))
+nwx_frame <- data.frame(x=seq(x_lo,x_hi,(x_hi-x_lo)/100))
+nwx <- model.matrix(~x, data=nwx_frame)
+pred1 <- nwx %*% coef(mod)
+pred1_var <- diag(nwx %*% vcov(mod) %*% t(nwx))
+pred1_se <- sqrt(pred1_var)
+pred1_se2 <- sqrt(pred1_var+summary(mod)$dispersion)
+
+lines(nwx_frame$x, exp(pred1), col='red', lwd=2)
+lines(nwx_frame$x, exp(pred1+1.96*pred1_se), col='red')
+lines(nwx_frame$x, exp(pred1-1.96*pred1_se), col='red')
+lines(nwx_frame$x, exp(pred1+1.96)+pred1_se2, col='purple') 
+lines(nwx_frame$x, exp(pred1-1.96)+pred1_se2, col='purple')
+
+### Ben Bolker code from the wikidot:
+# library(nlme) 
+# fm1 <- lme(distance ~ age*Sex, random = ~ 1 + age | Subject, data = Orthodont) 
+# 
+# plot(Orthodont)
+# newdat <- expand.grid(age=c(8,10,12,14), Sex=c("Male","Female")) 
+# newdat$pred <- predict(fm1, newdat, level = 0)
+# 
+# Designmat <- model.matrix(eval(eval(fm1$call$fixed)[-2]), newdat[-3]) 
+# predvar <- diag(Designmat %*% fm1$varFix %*% t(Designmat)) 
+# newdat$SE <- sqrt(predvar) 
+# newdat$SE2 <- sqrt(predvar+fm1$sigma^2)
+# 
+# library(ggplot2) 
+# pd <- position_dodge(width=0.4) 
+# g0 <- ggplot(newdat,aes(x=age,y=pred,colour=Sex))+ 
+#   geom_point(position=pd) 
+# g0 + geom_linerange(aes(ymin=pred-2*SE,ymax=pred+2*SE), position=pd)
+# 
+# ## prediction intervals 
+# g0 + geom_linerange(aes(ymin=pred-2*SE2,ymax=pred+2*SE2), position=pd)
+
+### Further (alternative) code reference from the above:
+set.seed(42)
+x <- rep(0:100,10)
+y <- 15 + 2*rnorm(1010,10,4)*x + rnorm(1010,20,100)
+id<-rep(1:10,each=101)
+
+dtfr <- data.frame(x=x ,y=y, id=id)
+
+library(nlme)
+
+model.mx <- lme(y~x,random=~1+x|id,data=dtfr)
+
+#create data.frame with new values for predictors
+#more than one predictor is possible
+new.dat <- data.frame(x=0:100)
+#predict response
+new.dat$pred <- predict(model.mx, newdata=new.dat,level=0)
+
+#create design matrix
+Designmat <- model.matrix(eval(eval(model.mx$call$fixed)[-2]), new.dat[-ncol(new.dat)])
+
+#compute standard error for predictions
+predvar <- diag(Designmat %*% model.mx$varFix %*% t(Designmat))
+new.dat$SE <- sqrt(predvar) 
+new.dat$SE2 <- sqrt(predvar+model.mx$sigma^2)
+
+library(ggplot2) 
+p1 <- ggplot(new.dat,aes(x=x,y=pred)) + 
+  geom_line() +
+  geom_ribbon(aes(ymin=pred-2*SE2,ymax=pred+2*SE2),alpha=0.2,fill="red") +
+  geom_ribbon(aes(ymin=pred-2*SE,ymax=pred+2*SE),alpha=0.2,fill="blue") +
+  geom_point(data=dtfr,aes(x=x,y=y)) +
+  scale_y_continuous("y")
+p1
