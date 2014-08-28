@@ -7,7 +7,7 @@ source('sim_pois.r')
 # Number of simulated observations:
 n_obs <- 500
 # Vector of 'true' parameters, one intercept, one slope.
-b <- c(-1,1)
+b <- c(0,0.5)
 # Upper and lower values of X (simulation draws random X's between these):
 x_lo <- 2
 x_hi <- 4
@@ -71,10 +71,6 @@ predict_jm <- function(fit, xv, z=1) {
   return(data.frame(mn=liv(eta_mn),lo=liv(eta_lo),hi=liv(eta_hi)))
 }
 
-pred_jm1 <- predict_jm(mod, 'x', z=1)
-lines(nwx$x, pred_jm1$mn, col='green', lwd=2)
-lines(nwx$x, pred_jm1$lo, col='green', lwd=1, lty='dashed')
-lines(nwx$x, pred_jm1$hi, col='green', lwd=1, lty='dashed')
 
 pred_jm2 <- predict_jm(mod, 'x', z=1.96)
 lines(nwx$x, pred_jm2$mn, col='darkgreen', lwd=2)
@@ -197,37 +193,69 @@ lines(nwx$x, exp(apply(eta, 2, function(x) quantile(x, probs=c(0.975)))), col='p
 ### The above doesn't look right and is certainly much bigger than expected based on previous go's.
 ### Is this right, and is it a consequence of the variability? Seems strange given the data...
 
-### Try again with different version of pred_sim:
+### First reset the plot:
+par(mfrow=c(1,1))
+plot(mydat$x, mydat$y)
+lines(nwx$x, pred$fit, lwd=2, col='red')                      # predict() fit
+lines(nwx$x, pred$fit+pred$se*1.96, col='red', lty='dashed')  # predict() fit +/- 1.96*SE
+lines(nwx$x, pred$fit-pred$se*1.96, col='red', lty='dashed')  # predict() fit +/- 1.96*SE
+lines(nwx$x, pred2_lo, col='blue', lwd=2, lty='dotdash')      # 95% quantiles of SIM output
+lines(nwx$x, pred2_hi, col='blue', lwd=2, lty='dotdash')      # 95% quantiles of SIM output
 
-pred_simV2 <- function(fit, nsims=1000, xv) {
-  k <- length(coef(fit)) # Number of parameters estimated. NOTE - MODIFY FOR OTHER MODELS
-  n <- nrow(fit$model)
-  d <- summary(fit)$dispersion          # sigma_hat; estimated residual SD
-  s <- d*sqrt((n-k)/rchisq(nsims, n-k)) # sigma; simulated residual SD
-  xmn <- min(model.matrix(fit)[,xv])
-  xmx <- max(model.matrix(fit)[,xv])
-  xdf <- data.frame(x=seq(xmn, xmx, (xmx-xmn)/100))
-  xmm <- model.matrix(~x, data=xdf)
-  eta <- as.data.frame(NULL)
-  for(i in 1:nrow(xmm)) {
-    x_j <- as.vector(NULL)
-    for(j in 1:nsims) {
-      coefs <- rmvnorm(1, coef(fit), vcov(fit)*s[j]^2)
-      x_j <- c(x_j, (xmm[i,] %*% t(coefs)))
-      #x_j <- c(x_j, xmm[i,] %*% coefs[j,] + rnorm(1, 0, summary(fit)$dispersion))
-      #x_j <- c(x_j, rnorm(1, xmm[i,] %*% coefs[j,], summary(fit)$dispersion))
-    }
-    eta <- rbind(eta, x_j)
+### Try again with different version of pred_sim but now only simulate coefficients:
+
+coef_simV1a <- function(fit, nsims=1000, xv) {
+  ### Tested 28/08/2014 for Gaussian models - works as sim()
+  ### Tested 28/08/2014 for Poisson models - works as sim()
+  coefs <- as.data.frame(NULL)
+  for(j in 1:nsims) {
+    coefs <- rbind(coefs, rmvnorm(1, coef(fit), vcov(fit)))
   }
-  return(t(eta))
+  return(coefs)
 }
 
-eta <- pred_simV2(mod, nsims=1000, 'x')
-lines(nwx$x, exp(apply(eta, 2, mean)), col='purple', lwd=2)
-lines(nwx$x, exp(apply(eta, 2, function(x) quantile(x, probs=c(0.025)))), col='purple')
-lines(nwx$x, exp(apply(eta, 2, function(x) quantile(x, probs=c(0.975)))), col='purple')
+coefs_jm1 <- coef_simV1a(mod, nsims=1000)
+## Calculate predictions using above simmed pars:
+nwx_mm <- model.matrix(~x, data=nwx)
+etas <- as.data.frame(NULL)
+for (i in 1:nrow(nwx)) {
+  etas <- rbind(etas, t(nwx_mm %*% as.numeric(coefs_jm1[i,])))
+}
+mu <- exp(apply(etas, 2, mean))
+mu_lo <- exp(apply(etas, 2, function(x) quantile(x, probs=c(0.025))))
+mu_hi <- exp(apply(etas, 2, function(x) quantile(x, probs=c(0.975))))
+lines(nwx$x, mu, col='purple', lwd=2)
+lines(nwx$x, mu_lo, col='purple', lwd=2)
+lines(nwx$x, mu_hi, col='purple', lwd=2)
 
-### So the function pred_simV2() above is pretty much what sim() does in the ARM package.
+### So the function coef_simV1a() above is pretty much what sim() does in the ARM package.
+
+### Now account for the estimated residual variance:
+
+coef_simV1b <- function(fit, nsims=1000, xv) {
+  fit_df <- attr(logLik(fit),'df')      # = n-k = estimated number of parameters.
+  d <- summary(fit)$dispersion          # sigma_hat^2; estimated residual VARIANCE
+  s <- sqrt(d)*sqrt((fit_df)/rchisq(nsims, fit_df)) # sigma; simulated residual SD
+  coefs <- as.data.frame(NULL)
+  for(j in 1:nsims) {
+    coefs <- rbind(coefs, rmvnorm(1, coef(fit), vcov(fit)*s[j]^2))
+  }
+  return(coefs)
+}
+
+coefs_jm2 <- coef_simV1b(mod, nsims=1000)
+## Calculate predictions using above simmed pars:
+nwx_mm <- model.matrix(~x, data=nwx)
+etas <- as.data.frame(NULL)
+for (i in 1:nrow(nwx)) {
+  etas <- rbind(etas, t(nwx_mm %*% as.numeric(coefs_jm2[i,])))
+}
+mu <- exp(apply(etas, 2, mean))
+mu_lo <- exp(apply(etas, 2, function(x) quantile(x, probs=c(0.025))))
+mu_hi <- exp(apply(etas, 2, function(x) quantile(x, probs=c(0.975))))
+lines(nwx$x, mu, col='green', lwd=2)
+lines(nwx$x, mu_lo, col='green', lwd=1)
+lines(nwx$x, mu_hi, col='green', lwd=1)
 
 
 
