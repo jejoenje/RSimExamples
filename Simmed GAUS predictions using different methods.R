@@ -47,7 +47,6 @@ lines(nwx$x, pred_sim_hi, lwd=1, col='purple', lty='dotted')
 ### Predictions from home-brew sim() equivalent (to check) with sim() output):
 library(mvtnorm)
 
-
 pred_simV1 <- function(fit, nsims=1000, xv) {
   
   fit_df <- attr(logLik(fit),'df')      # = n-k = estimated number of parameters.
@@ -67,8 +66,6 @@ pred_simV1 <- function(fit, nsims=1000, xv) {
   }
   return(t(eta))
 }
-
-
 
 pred_simV2 <- function(fit, nsims=1000, xv) {
   
@@ -222,4 +219,40 @@ lines(loess.smooth(nwx$x, apply(pred_jm5, 2, function(x) quantile(x, probs=c(0.0
 lines(loess.smooth(nwx$x, apply(pred_jm5, 2, function(x) quantile(x, probs=c(0.975))))$x,
       loess.smooth(nwx$x, apply(pred_jm5, 2, function(x) quantile(x, probs=c(0.9755))))$y, col='blue')
 
+
+### FINALLY, AN ALTERNATIVE APPROACH
+### 
+### FROM http://glmm.wikidot.com/faq
+# Predictions and/or confidence (or prediction) intervals on predictions
+# 
+# The general recipe for computing predictions from a linear or generalized linear model is to:
+# 
+# -figure out the model matrix X corresponding to the new data;
+# -* matrix-multiply X by the parameter vector β to get the predictions (or linear predictor in the case of GLM(M)s);
+# -extract the variance-covariance matrix of the parameters V
+# -compute XVX′ to get the variance-covariance matrix of the predictions;
+# -extract the diagonal of this matrix to get variances of predictions;
+# -if computing prediction rather than confidence intervals, add the residual variance;
+# -take the square-root of the variances to get the standard deviations (errors) of the predictions;
+# -compute confidence intervals based on a Normal approximation;
+# -for GL(M)Ms, run the confidence interval boundaries (not the standard errors) through the inverse-link function.
+# 
+
+eta0 <- nwx_mm %*% coef(mod)
+mod_vcov <- vcov(mod)
+eta0_vcov <- nwx_mm %*% mod_vcov %*% t(nwx_mm)
+eta0_var <- diag(eta0_vcov)+summary(mod)$dispersion
+eta0_sd <- sqrt(eta0_var)
+eta_lo <- eta0-eta0_sd
+eta_hi <- eta0+eta0_sd
+eta_mu <- eta0
+
+lines(nwx$x, eta_mu, lwd=2, col='blue', lty='dashed')
+lines(nwx$x, eta_hi, lwd=1, col='blue', lty='dotted')
+lines(nwx$x, eta_lo, lwd=1, col='blue', lty='dotted')
+
+### Add confint() based profile likelihood CI's for comparison:
+coef_ci <- confint(mod)
+lines(nwx$x, nwx_mm %*% coef_ci[,1], col='darkgreen', lty='dashed')
+lines(nwx$x, nwx_mm %*% coef_ci[,2], col='darkgreen', lty='dashed')
 
