@@ -1,4 +1,5 @@
 library(glmmADMB)
+library(lattice)
 
 sim_mm_nb <- function(n_groups, n_obs, group_sd, size, b) {
   N <- n_groups*n_obs
@@ -29,13 +30,16 @@ sim_series_admb <- function(K=100, n_groups, n_obs, group_sd, size, b) {
   return(list(ests=ests, e_var=e_var, e_size=e_size))
 }
 
+# single model
 set.seed(52358)
 mydat <- sim_mm_nb(n_groups=12,n_obs=100, group_sd=1, size=0.8, b=c(1,2))
 xyplot(y ~ x | group, data=mydat)
 mod <- glmmadmb(y ~ x + (1|group), data=mydat, family='nbinom')
 
+# series of sims and fits
 ests <- sim_series_admb(n_groups=12, n_obs=50, group_sd=1, size=0.8, b=c(1,2))
 
+save(ests, 'sim_series_mmnb_admb.Rdata')
 apply(ests$ests, 2, mean)
 mean(ests$e_var)
 mean(ests$e_size)
