@@ -53,7 +53,8 @@ lines(vg1$dist, loess(gamma~dist, data=vg1)$fit, col='grey')
 #plot(vario.glm, smooth=T)
 
 # Fit GLS taking SAC into account:
-mod1_sac <- gls(y1 ~ x, correlation=corExp(form=~xc+yc, nugget=T), data=mydat)
+# Note that we NEED TO FIT WITH ML (not REML) TO ALLOW COMPARISON WITH GLM FIT ABOVE:
+mod1_sac <- gls(y1 ~ x, correlation=corExp(form=~xc+yc, nugget=T), data=mydat, method='ML')
 summary(mod1_sac)
 # Note that we need NORMALISED residuals to correctly assess variograms
 #  (normalised resids are scaled by estimated variance-covariance, which involves the spatial structure)

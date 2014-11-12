@@ -1,0 +1,359 @@
+opar <- par()
+library(lme4)
+library(sp)   # for bubble()
+
+source('sim_lmm_sp.R')
+source('sim_lmm_sp2.R')
+source('helpjm.r')
+
+# Parameters for simulations, definitions in sim_lmm_sp.R:
+parset1 <-list(
+  xcmin=0,
+  xcmax=1000,
+  ycmin=0,
+  ycmax=1000,
+  rho=0.01,
+  re_sd=2,
+  e_sp_sd=4,
+  e=1,
+  a=1,
+  b=2,
+  n_site=20,
+  n_obs_site=25)
+
+# Simulate some mixed-effects data with spatially independent response y and spatially correlated
+#  response y_sp:
+mydat <- do.call(sim_lmm_sp, parset1)
+
+
+#####################
+# First lets consider the non-spatially correlated data y.
+# This should just fit with a straightforward mixed effects model.
+mod_lmer_ns <- lmer(y ~ x + (1|site), data=mydat, REML=F)
+
+# All model estimates:
+summary(mod_lmer_ns)
+# Fixed effect estimates:
+fixef(mod_lmer_ns)
+# Random effect SD estimates:
+VarCorr(mod_lmer_ns)
+# Dispersion estimate a la Zuur:
+dispZuur(mod_lmer_ns)
+
+# Do the above a bunch of times to see how well the estimation works:
+#  (SAVED AS OBJECT, ONLY RUN IF NEEDED - LOAD COMMAND BELOW)
+
+# ests <- as.data.frame(NULL)
+# K <- 1000
+# pb <- txtProgressBar(min=0, max=K, style=3)
+# for(i in 1:K) {
+#   nwdat <- do.call(sim_lmm_sp, parset1)
+#   nwmod <- lmer(y ~ x + (1|site), data=nwdat, REML=F)
+#   nwests <- c(as.vector(fixef(nwmod)),
+#               as.data.frame(VarCorr(nwmod))[,'sdcor'],
+#               dispZuur(nwmod))
+#   ests <- rbind(ests, t(data.frame(nwests)))
+#   setTxtProgressBar(pb,i)
+# }
+# close(pb)
+# names(ests) <- c('a','b','re_sd','e_sd','disp')
+# save(ests, file='sim_lmm_1.Rdata')
+
+load('sim_lmm_1.Rdata')
+par(mfrow=c(2,3))
+dplot(ests[,'a'],parset1$a,'a')
+dplot(ests[,'b'],parset1$b,'b')
+dplot(ests[,'re_sd'],parset1$re_sd,'re_sd')
+dplot(ests[,'e_sd'],parset1$e,'e_sd')
+dplot(ests[,'disp'],1,'disp')
+
+# Try some diag plots:
+# Residuals against fitted:
+plot(resid(mod1), fitted(mod1, type='response'))
+# Histogram of residuals
+hist(resid(mod1))
+# Residuals on a map:
+mydat$E <- resid(mod1)
+coordinates(mydat) <- c('xc','yc')
+bubble(mydat, 'E', col=c('black','grey'), main='D-residuals', xlab='X',ylab='Y')
+# Variogram
+mod1vg <- variogram(E ~ 1, data=mydat)
+plotvario(mod1vg)
+
+#####################
+# Now consider the spatially correlated data y_sp.
+# This should just fit with a straightforward mixed effects model.
+mydat <- as.data.frame(mydat)
+mod1_sp <- lmer(y_sp ~ x + (1|site), data=mydat, REML=F)
+
+# All model estimates:
+summary(mod1_sp)
+# Fixed effect estimates:
+fixef(mod1_sp)
+# Random effect SD estimates:
+VarCorr(mod1_sp)
+# Dispersion estimate a la Zuur:
+dispZuur(mod1_sp)
+
+# Try some diag plots:
+# Residuals against fitted:
+plot(resid(mod1_sp), fitted(mod1_sp, type='response'))
+# Histogram of residuals
+hist(resid(mod1_sp))
+# Residuals on a map:
+mydat$E_sp <- resid(mod1_sp)
+coordinates(mydat) <- c('xc','yc')
+bubble(mydat, 'E_sp', col=c('black','grey'), main='D-residuals', xlab='X',ylab='Y')
+# Variogram
+mod1_sp_vg <- variogram(E_sp ~ 1, data=mydat)
+plotvario(mod1_sp_vg)
+
+# Run a simulation series as above:
+#  (SAVED AS OBJECT, ONLY RUN IF NEEDED - LOAD COMMAND BELOW)
+
+# ests_sp <- as.data.frame(NULL)
+# K <- 1000
+# pb <- txtProgressBar(min=0, max=K, style=3)
+# for(i in 1:K) {
+#   nwdat <- do.call(sim_lmm_sp, parset1)
+#   nwmod <- lmer(y_sp ~ x + (1|site), data=nwdat, REML=F)
+#   nwests <- c(as.vector(fixef(nwmod)),
+#               as.data.frame(VarCorr(nwmod))[,'sdcor'],
+#               dispZuur(nwmod))
+#   ests_sp <- rbind(ests_sp, t(data.frame(nwests)))
+#   setTxtProgressBar(pb,i)
+# }
+# close(pb)
+# names(ests_sp) <- c('a','b','re_sd','e_sd','disp')
+# save(ests_sp, file='sim_lmm_sp_1.Rdata')
+
+load('sim_lmm_sp_1.Rdata')
+par(mfrow=c(2,3))
+dplot(ests_sp[,'a'],parset1$a,'a')
+dplot(ests_sp[,'b'],parset1$b,'b')
+dplot(ests_sp[,'re_sd'],parset1$re_sd,'re_sd')
+dplot(ests_sp[,'e_sd'],parset1$e,'e_sd')
+dplot(ests_sp[,'disp'],1,'disp')
+
+
+###
+### Now how does clustering of sites in space affect the above.
+###
+rm(list=ls())
+source('sim_lmm_sp.R')
+source('sim_lmm_sp2.R')
+source('helpjm.r')
+
+# Parameters for simulations, definitions in sim_lmm_sp.R:
+parset1 <-list(
+  xcmin=0,
+  xcmax=1000,
+  ycmin=0,
+  ycmax=1000,
+  rho=0.01,
+  re_sd=2,
+  e_sp_sd=4,
+  e=1,
+  a=1,
+  b=2,
+  n_site=20,
+  n_obs_site=100)
+
+# Simulate some mixed-effects data with spatially independent response y and spatially correlated
+#  response y_sp:
+mydat2 <- do.call(sim_lmm_sp2, parset1)
+plot(mydat2$xc, mydat2$yc)
+
+# Fit LMM on SAC but not accounting for this:
+mod2_sp <- lmer(y_sp ~ x + (1|site), data=mydat2, REML=F)
+
+# All model estimates:
+summary(mod2_sp)
+# Fixed effect estimates:
+fixef(mod2_sp)
+# Random effect SD estimates:
+VarCorr(mod2_sp)
+# Dispersion estimate a la Zuur:
+dispZuur(mod2_sp)
+
+# Try some diag plots:
+# Residuals against fitted:
+plot(resid(mod2_sp), fitted(mod2_sp, type='response'))
+# Histogram of residuals
+hist(resid(mod2_sp))
+# Residuals on a map:
+mydat2$E2_sp <- resid(mod2_sp)
+coordinates(mydat2) <- c('xc','yc')
+bubble(mydat2, 'E2_sp', col=c('black','grey'), main='D-residuals', xlab='X',ylab='Y')
+plotbubble(mydat2$xc, mydat2$yc, mydat2$E2_sp)
+# example for a single site:
+# site4 <- mydat2[mydat2$site==levels(mydat2$site)[4],]
+# bubble(site4, 'E2_sp', col=c('black','grey'), main='D-residuals', xlab='X',ylab='Y')
+# plotbubble(site4$xc, site4$yc, site4$E2_sp)
+# Plot all sites:
+par(mfrow=c(4,5))
+par(mar=c(0.5,0.5,0.5,0.5))
+for(i in 1:nlevels(mydat2$site)) {
+  sitedat <- mydat2[mydat2$site==levels(mydat2$site)[i],]
+  plotbubble(sitedat$xc, sitedat$yc, sitedat$E2_sp, axt='n', xlab='', ylab='')
+}; par(opar)
+
+# Variogram - I don't think this works right. Don't think these are the residuals that we need.
+mod2_sp_vg <- variogram(E2_sp ~ 1, data=mydat2)
+plotvario(mod2_sp_vg)
+
+
+### So to check the above problem, try fitting the same model but with nlme
+# First clear the decks.
+rm(list=ls())
+opar <- par()
+library(sp)   # for bubble()
+source('sim_lmm_sp.R')
+source('sim_lmm_sp2.R')
+source('helpjm.r')
+
+# Parameters for simulations, definitions in sim_lmm_sp.R:
+parset1 <-list(
+  xcmin=0,
+  xcmax=1000,
+  ycmin=0,
+  ycmax=1000,
+  rho=0.01,
+  re_sd=2,
+  e_sp_sd=4,
+  e=1,
+  a=1,
+  b=2,
+  n_site=20,
+  n_obs_site=25)
+
+# Simulate some mixed-effects data with spatially independent response y and spatially correlated
+#  response y_sp:
+mydat <- do.call(sim_lmm_sp2, parset1)
+
+# First fit the model with NLME:
+library(nlme)
+mod_lme <- lme(y_sp ~ x, random=~1|site, data=mydat)
+mydat$E_lme_def <- resid(mod_lme)
+mydat$E_lme_pearson <- resid(mod_lme, type='pearson')
+mydat$E_lme_norm <- resid(mod_lme, type='normalized')
+par(mfrow=c(2,3))
+plot(mydat$E_lme_def, mydat$E_lme_pearson)
+plot(mydat$E_lme_def, mydat$E_lme_norm)
+plot(mydat$E_lme_pearson, mydat$E_lme_norm)
+plotbubble(mydat$xc, mydat$yc, mydat$E_lme_def)
+plotbubble(mydat$xc, mydat$yc, mydat$E_lme_pearson)
+plotbubble(mydat$xc, mydat$yc, mydat$E_lme_norm)
+coordinates(mydat) <- c('xc','yc')
+mod_lme_vg <- variogram(E_lme_def ~ 1, data=mydat)
+par(mfrow=c(1,1))
+plotvario(mod_lme_vg)
+# So the LME fit doesn't seem to give a variogram that looks spatially autocorrelated even
+#  when we know the data definitely are!
+mod_lme_vg2 <- Variogram(mod_lme, form=~xc+yc, robust=T, maxDist=2000, resType='normalized')
+plot(mod_lme_vg2$dist, mod_lme_vg2$variog, ylim=c(0, max(mod_lme_vg2$variog)))
+# The above looks a bit 'better'...
+mod_lme_vg2 <- Variogram(mod_lme, form=~xc+yc, robust=T, maxDist=2000, resType='pearson')
+plot(mod_lme_vg2$dist, mod_lme_vg2$variog, ylim=c(0, max(mod_lme_vg2$variog)))
+# So how are the two variogs above different???
+mod_lme_vg2 <- Variogram(mod_lme, form=~xc+yc)
+plot(mod_lme_vg2$dist, mod_lme_vg2$variog, ylim=c(0, max(mod_lme_vg2$variog)))
+
+# Now try the same but using lme4:
+detach('package:nlme')
+library(lme4)
+mydat <- as.data.frame(mydat)
+mod_lme4 <- lmer(y_sp ~ x + (1|site), data=mydat)
+mydat$E_lme4_def <- resid(mod_lme4)
+mydat$E_lme4_pearson <- resid(mod_lme4, type='pearson')
+mydat$E_lme4_dev <- resid(mod_lme4, type='deviance')
+par(mfrow=c(2,3))
+plot(mydat$E_lme4_def, mydat$E_lme4_pearson); abline(a=0, b=1, col='red')
+plot(mydat$E_lme4_def, mydat$E_lme4_dev); abline(a=0, b=1, col='red')
+plot(mydat$E_lme4_pearson, mydat$E_lme4_dev); abline(a=0, b=1, col='red')
+plotbubble(mydat$xc, mydat$yc, mydat$E_lme4_def)
+plotbubble(mydat$xc, mydat$yc, mydat$E_lme4_pearson)
+plotbubble(mydat$xc, mydat$yc, mydat$E_lme4_dev)
+coordinates(mydat) <- c('xc','yc')
+mod_lme4_vg <- variogram(E_lme4_def ~ 1, data=mydat)
+par(mfrow=c(1,1))
+plotvario(mod_lme4_vg)
+
+
+# Clearly the variograms in the residuals are pretty similar irrespective of which model fit is used:
+par(mfrow=c(1,2))
+plotvario(mod_lme_vg)
+plotvario(mod_lme4_vg)
+
+###
+### SO, 
+# based on these simulated data, it appears that the variograms of the residuals from both LME and LME4 fits
+# are very similar, irrespective of the "type" of residuals considered.
+# This leaves two options - 
+# 1. Both lme and lme4 residuals for some reason don't return "correct" normalised residuals as gls()
+# would do.
+# 2. This apparent lack of spatial autocorrelation is due to the random effect for site eating most of
+# it up. In the above sims, sites are highly clustered in space.
+
+# I could check 1. by trying to fit a GLS-type model using some extra variance structure for the RE.
+#
+# Alternatively, plot variograms for each site on its own, AND/OR re-do simulations where the spatial
+#  and RE effects are entirely indepedent.
+
+
+#### Try the latter first - re-do the sims with indepedent effects of space and RE:
+### Clear the decks.
+detach('package:lme4')
+rm(list=ls())
+opar <- par()
+library(sp)   # for bubble()
+source('sim_lmm_sp.R')
+source('sim_lmm_sp2.R')
+source('helpjm.r')
+# Parameters for simulations, definitions in sim_lmm_sp.R:
+parset1 <-list(
+  xcmin=0,
+  xcmax=1000,
+  ycmin=0,
+  ycmax=1000,
+  rho=0.01,
+  re_sd=2,
+  e_sp_sd=4,
+  e=1,
+  a=1,
+  b=2,
+  n_site=20,
+  n_obs_site=25)
+# Simulate some mixed-effects data with spatially independent response y and spatially correlated
+#  response y_sp:
+mydat <- do.call(sim_lmm_sp, parset1)
+# First fit the model with NLME:
+library(nlme)
+mod_lme <- lme(y_sp ~ x, random=~1|site, data=mydat)
+mydat$E_lme <- resid(mod_lme)
+plotbubble(mydat$xc, mydat$yc, mydat$E_lme)
+coordinates(mydat) <- c('xc','yc')
+mod_lme_vg <- variogram(E_lme ~ 1, data=mydat)
+par(mfrow=c(1,1))
+plotvario(mod_lme_vg)
+# AHA! So a very clear pattern in the variogram in this case - suggesting clear spatial autocorrelation.
+# Now repeat with lme4:
+detach('package:nlme')
+library(lme4)
+mydat <- as.data.frame(mydat)
+mod_lme4 <- lmer(y_sp ~ x + (1|site), data=mydat)
+mydat$E_lme4 <- resid(mod_lme4)
+plotbubble(mydat$xc, mydat$yc, mydat$E_lme4)
+coordinates(mydat) <- c('xc','yc')
+mod_lme4_vg <- variogram(E_lme4 ~ 1, data=mydat)
+par(mfrow=c(1,1))
+plotvario(mod_lme4_vg)
+# Same again - as per the lme fit!
+par(mfrow=c(1,2))
+plotvario(mod_lme_vg)
+plotvario(mod_lme4_vg)
+
+### So it seems that a lot (or all!) of the apparent SAC in the data across all sites
+###  gets completely swamped/masked by the differences between sites, at least in the Semivariogram.
+
+### So next -  try to plot the variograms per site, instead...
