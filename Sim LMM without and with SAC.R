@@ -7,9 +7,9 @@ sim_lmm_sp <- function(n_obs_site=25,               # number of observations per
                        n_sites=20,                  # number of sites (random effect levels)
                        wi_site_scale=100,           # parameter scaling the within-site variation in X and Y relative
                                                     #  to across-site variation in X and Y.
-                       rho=2,                       # spatial corr parameter
+                       rho=0.01,                     # spatial corr parameter
                        re_sd=2,                     # random effect SD
-                       re_sp_sd=1,                  # spatial random effect SD
+                       re_sp_sd=4,                  # spatial random effect SD
                        e_sd=1,                      # residual SD
                        a=1,                         # fixed intercept
                        b=2,                         # fixed slope    
@@ -76,8 +76,18 @@ sqrt(as.data.frame(VarCorr(mod_nospace))[,'vcov'])
 plot(predict(mod_nospace), resid(mod_nospace))
 # Plot predicted against observed:
 plot(obsdat$y_nospace, predict(mod_nospace))
-# Plot residuals against predicted for each site:
+# Plot 'map' of residuals:
+plot(obsdat$xc, obsdat$yc, cex=resid(mod_nospace), pch=16, 
+     col=gray.colors(n=length(resid(mod_nospace)))[order(resid(mod_nospace))])
+# Plot 'map' of residuals for each site:
 obsdat$res_nospace <- resid(mod_nospace)
+par(mfrow=c(4,5))
+for (i in 1:nlevels(obsdat$site)) {
+  sitedat <- obsdat[obsdat$site==levels(obsdat$site)[i],]
+  plot(sitedat$xc, sitedat$yc, pch=16, cex=sitedat$res_nospace, 
+       col=gray.colors(n=length(sitedat$res_nospace))[order(sitedat$res_nospace)])
+}
+# Plot residuals against predicted for each site:
 obsdat$pred_nospace <- predict(mod_nospace)
 xyplot(res_nospace ~ pred_nospace | site, data=obsdat)
 # Overdispersion estimate a la Zuur:
@@ -128,24 +138,24 @@ xcmax<-382658
 xcmin<-270363
 ycmax<-728811
 ycmin<-636634
-wi_site_scale<-100
+wi_site_scale<-10
 n_obs_site<-25
 n_sites<-20
 # Given the above coordinate limits and scalar vs between and within site variation...
-x <- as.vector(NULL)    
-y <- as.vector(NULL)
-site <- paste('site',1:n_sites,sep='')
-sitex <- runif(n_sites, xcmin, xcmax)
-sitey <- runif(n_sites, ycmin, ycmax)
-for(i in 1:length(site)) {
-  x <- c(x, round(rep(sitex[i],n_obs_site)+rnorm(n_obs_site, 0, (xcmax-xcmin)/wi_site_scale)))
-  y <- c(y, round(rep(sitey[i],n_obs_site)+rnorm(n_obs_site, 0, (ycmax-ycmin)/wi_site_scale)))
-}
-sites <- data.frame(site=factor(rep(as.vector(site), each=n_obs_site)), xc=x, yc=y)
-av_xydist <- mean(as.matrix(ddply(sites, .(site), summarise, 
-                                  xcdiff=max(xc)-min(xc), 
-                                  ycdiff=max(yc)-min(yc))[,2:3]))
-av_xydist
+# x <- as.vector(NULL)    
+# y <- as.vector(NULL)
+# site <- paste('site',1:n_sites,sep='')
+# sitex <- runif(n_sites, xcmin, xcmax)
+# sitey <- runif(n_sites, ycmin, ycmax)
+# for(i in 1:length(site)) {
+#   x <- c(x, round(rep(sitex[i],n_obs_site)+rnorm(n_obs_site, 0, (xcmax-xcmin)/wi_site_scale)))
+#   y <- c(y, round(rep(sitey[i],n_obs_site)+rnorm(n_obs_site, 0, (ycmax-ycmin)/wi_site_scale)))
+# }
+# sites <- data.frame(site=factor(rep(as.vector(site), each=n_obs_site)), xc=x, yc=y)
+# av_xydist <- mean(as.matrix(ddply(sites, .(site), summarise, 
+#                                   xcdiff=max(xc)-min(xc), 
+#                                   ycdiff=max(yc)-min(yc))[,2:3]))
+# av_xydist
 # ... av_xydist is the average distance between x and y coordinates for each site.
 # So on average, there is av_xydist units of distance between observations within sites.
 
@@ -153,11 +163,15 @@ av_xydist
 #  c = exp(-rho*distance)
 # So if we want the correlation to be strong at close distance WITHIN sites but decrease to almost zero
 #  when outside a site, 
-rho <- 4/av_xydist
-xseq <- seq(1,av_xydist, 10)
-plot(xseq, exp(-rho*xseq), xlab='Distance', ylab='Correlation')
+
+#rho <- 4/av_xydist
+#xseq <- seq(1,av_xydist, 10)
+#plot(xseq, exp(-rho*xseq), xlab='Distance', ylab='Correlation')
+
+rho <- 0.01
   
-obsdat <- sim_lmm_sp(n_sites=20, n_obs_site=25, rho=rho, wi_site_scale=100, xcmax=xcmax, xcmin=xcmin, ycmax=ycmax, ycmin=ycmin)
+obsdat <- sim_lmm_sp(n_sites=n_sites, n_obs_site=25, rho=rho, wi_site_scale=wi_site_scale, 
+                     xcmax=xcmax, xcmin=xcmin, ycmax=ycmax, ycmin=ycmin)
 
 par(mfrow=c(2,3))
 plot(obsdat$xc, obsdat$yc)
