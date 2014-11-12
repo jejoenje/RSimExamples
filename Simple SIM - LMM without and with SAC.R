@@ -207,7 +207,9 @@ plotvario(mod2_sp_vg)
 # First clear the decks.
 rm(list=ls())
 opar <- par()
-library(sp)   # for bubble()
+library(MASS)  # for mvrnorm()
+library(gstat) # for variogram()
+library(sp)    # for bubble()
 source('sim_lmm_sp.R')
 source('sim_lmm_sp2.R')
 source('helpjm.r')
@@ -234,51 +236,27 @@ mydat <- do.call(sim_lmm_sp2, parset1)
 # First fit the model with NLME:
 library(nlme)
 mod_lme <- lme(y_sp ~ x, random=~1|site, data=mydat)
-mydat$E_lme_def <- resid(mod_lme)
-mydat$E_lme_pearson <- resid(mod_lme, type='pearson')
-mydat$E_lme_norm <- resid(mod_lme, type='normalized')
-par(mfrow=c(2,3))
-plot(mydat$E_lme_def, mydat$E_lme_pearson)
-plot(mydat$E_lme_def, mydat$E_lme_norm)
-plot(mydat$E_lme_pearson, mydat$E_lme_norm)
-plotbubble(mydat$xc, mydat$yc, mydat$E_lme_def)
-plotbubble(mydat$xc, mydat$yc, mydat$E_lme_pearson)
-plotbubble(mydat$xc, mydat$yc, mydat$E_lme_norm)
+mydat$E_lme <- resid(mod_lme)
+plotbubble(mydat$xc, mydat$yc, mydat$E_lme)
 coordinates(mydat) <- c('xc','yc')
-mod_lme_vg <- variogram(E_lme_def ~ 1, data=mydat)
+mod_lme_vg <- variogram(E_lme ~ 1, data=mydat)
 par(mfrow=c(1,1))
 plotvario(mod_lme_vg)
 # So the LME fit doesn't seem to give a variogram that looks spatially autocorrelated even
 #  when we know the data definitely are!
-mod_lme_vg2 <- Variogram(mod_lme, form=~xc+yc, robust=T, maxDist=2000, resType='normalized')
-plot(mod_lme_vg2$dist, mod_lme_vg2$variog, ylim=c(0, max(mod_lme_vg2$variog)))
-# The above looks a bit 'better'...
-mod_lme_vg2 <- Variogram(mod_lme, form=~xc+yc, robust=T, maxDist=2000, resType='pearson')
-plot(mod_lme_vg2$dist, mod_lme_vg2$variog, ylim=c(0, max(mod_lme_vg2$variog)))
-# So how are the two variogs above different???
-mod_lme_vg2 <- Variogram(mod_lme, form=~xc+yc)
-plot(mod_lme_vg2$dist, mod_lme_vg2$variog, ylim=c(0, max(mod_lme_vg2$variog)))
 
 # Now try the same but using lme4:
 detach('package:nlme')
 library(lme4)
 mydat <- as.data.frame(mydat)
 mod_lme4 <- lmer(y_sp ~ x + (1|site), data=mydat)
-mydat$E_lme4_def <- resid(mod_lme4)
-mydat$E_lme4_pearson <- resid(mod_lme4, type='pearson')
-mydat$E_lme4_dev <- resid(mod_lme4, type='deviance')
-par(mfrow=c(2,3))
-plot(mydat$E_lme4_def, mydat$E_lme4_pearson); abline(a=0, b=1, col='red')
-plot(mydat$E_lme4_def, mydat$E_lme4_dev); abline(a=0, b=1, col='red')
-plot(mydat$E_lme4_pearson, mydat$E_lme4_dev); abline(a=0, b=1, col='red')
-plotbubble(mydat$xc, mydat$yc, mydat$E_lme4_def)
-plotbubble(mydat$xc, mydat$yc, mydat$E_lme4_pearson)
-plotbubble(mydat$xc, mydat$yc, mydat$E_lme4_dev)
+mydat$E_lme4 <- resid(mod_lme4)
+plot(mydat$E_lme4, mydat$E_lme4); abline(a=0, b=1, col='red')
+plotbubble(mydat$xc, mydat$yc, mydat$E_lme4)
 coordinates(mydat) <- c('xc','yc')
-mod_lme4_vg <- variogram(E_lme4_def ~ 1, data=mydat)
+mod_lme4_vg <- variogram(E_lme4 ~ 1, data=mydat)
 par(mfrow=c(1,1))
 plotvario(mod_lme4_vg)
-
 
 # Clearly the variograms in the residuals are pretty similar irrespective of which model fit is used:
 par(mfrow=c(1,2))
@@ -357,3 +335,82 @@ plotvario(mod_lme4_vg)
 ###  gets completely swamped/masked by the differences between sites, at least in the Semivariogram.
 
 ### So next -  try to plot the variograms per site, instead...
+
+### New data, fitted with lme4
+
+rm(list=ls())
+opar <- par()
+library(sp)   # for bubble()
+library(lme4)
+source('sim_lmm_sp.R')
+source('sim_lmm_sp2.R')
+source('helpjm.r')
+# Parameters for simulations, definitions in sim_lmm_sp.R:
+parset1 <-list(
+  xcmin=0,
+  xcmax=1000,
+  ycmin=0,
+  ycmax=1000,
+  rho=0.01,
+  re_sd=2,
+  e_sp_sd=4,
+  e=1,
+  a=1,
+  b=2,
+  n_site=20,
+  n_obs_site=25)
+# Simulate some mixed-effects data with spatially independent response y and spatially correlated
+#  response y_sp:
+mydat <- do.call(sim_lmm_sp2, parset1)
+mod_lme4 <- lmer(y_sp ~ x + (1|site), data=mydat)
+summary(mod_lme4)
+dispZuur(mod_lme4)
+mydat$E_lme4 <- resid(mod_lme4)
+par(mfrow=c(1,2))
+plotbubble(mydat$xc, mydat$yc, mydat$E_lme4)
+coordinates(mydat) <- c('xc','yc')
+mod_lme4_vg <- variogram(E_lme4 ~ 1, data=mydat)
+plotvario(mod_lme4_vg)
+par(mfrow=c(4,5))
+par(mar=c(0.5,0.5,0.5,0.5))
+for(i in 1:nlevels(mydat$site)) {
+  sitedat <- mydat[mydat$site==levels(mydat$site)[i],]
+  plotbubble(sitedat$xc, sitedat$yc, sitedat$E_lme4, axt='n')
+}
+par(mfrow=c(4,5))
+par(mar=c(0.5,0.5,0.5,0.5))
+for(i in 1:nlevels(mydat$site)) {
+  sitedat <- mydat[mydat$site==levels(mydat$site)[i],]
+  vg <- variogram(E_lme4 ~ 1, data=sitedat)
+  plotvario(vg)
+}
+
+### Looks relatively strong per site - test w/o SAC:
+mydat <- do.call(sim_lmm_sp2, parset1)
+mod_lme4_ns <- lmer(y ~ x + (1|site), data=mydat)
+summary(mod_lme4_ns)
+dispZuur(mod_lme4_ns)
+mydat$E_lme4_ns <- resid(mod_lme4_ns)
+par(mfrow=c(1,2))
+plotbubble(mydat$xc, mydat$yc, mydat$E_lme4_ns)
+par(mfrow=c(4,5))
+par(mar=c(0.5,0.5,0.5,0.5))
+for(i in 1:nlevels(mydat$site)) {
+  sitedat <- mydat[mydat$site==levels(mydat$site)[i],]
+  plotbubble(sitedat$xc, sitedat$yc, sitedat$E_lme4, axt='n')
+}
+coordinates(mydat) <- c('xc','yc')
+mod_lme4_vg_ns <- variogram(E_lme4_ns ~ 1, data=mydat)
+plotvario(mod_lme4_vg_ns)
+par(mfrow=c(4,5))
+par(mar=c(0.5,0.5,0.5,0.5))
+for(i in 1:nlevels(mydat$site)) {
+  sitedat <- mydat[mydat$site==levels(mydat$site)[i],]
+  vg <- variogram(E_lme4_ns ~ 1, data=sitedat)
+  plotvario(vg)
+}
+
+
+
+
+
