@@ -43,26 +43,37 @@ plot(mydat$xc, mydat$yc, cex=abs(mydat$res1)/2, pch=16,
 cl_mod1 <- correlog(mydat$xc, mydat$yc, mydat$res1, increment=1, resamp=0)
 plot(cl_mod1$correlation[1:20], type='o', pch=16, ylab='Moran\'s I', xlab='Distance')
 #   Plot variogram OPTION 1:
-# coordinates(mydat) <- c('xc','yc')
-# vg1 <- variogram(res1 ~ 1, data=mydat)
-# plot(vg1$dist, vg1$gamma, type='o', pch=16)
+coordinates(mydat) <- c('xc','yc')
+vg1 <- variogram(res1 ~ 1, data=mydat)
+plot(vg1$dist, vg1$gamma, ylim=c(0,max(vg1$gamma)),pch=16)
+lines(vg1$dist, loess(gamma~dist, data=vg1)$fit, col='grey')
+
 #   Plot variogram OPTION 2 - DOESN'T WORK WITH GLM?:
 #vario.glm <- Variogram(mod1, form=~xc+yc, robust=T, maxDist=2000, resType='pearson')
 #plot(vario.glm, smooth=T)
 
 # Fit GLS taking SAC into account:
-
 mod1_sac <- gls(y1 ~ x, correlation=corExp(form=~xc+yc, nugget=T), data=mydat)
 summary(mod1_sac)
-mydat$res1_sac <- as.vector(resid(mod1_sac, type='pearson'))
-sum(mydat$res1_sac^2)/(N-attr(logLik(mod1_sac),"df"))
+# Note that we need NORMALISED residuals to correctly assess variograms
+#  (normalised resids are scaled by estimated variance-covariance, which involves the spatial structure)
+mydat$res1n_sac <- as.vector(resid(mod1_sac, type='normalized'))
+mydat$res1p_sac <- as.vector(resid(mod1_sac, type='pearson'))
+sum(mydat$res1p_sac^2)/(N-attr(logLik(mod1_sac),"df"))
+sum(mydat$res1n_sac^2)/(N-attr(logLik(mod1_sac),"df"))
 par(mfrow=c(2,3))
-plot(predict(mod1_sac), mydat$res1_sac)
-plot(mydat$xc, mydat$yc, cex=abs(mydat$res1_sac), pch=16, 
-     col=gray.colors(n=length(mydat$res1_sac))[order(mydat$res1_sac)])
-cl_mod1_sac <- correlog(mydat$xc, mydat$yc, mydat$res1_sac, increment=1, resamp=0)
+plot(predict(mod1_sac), mydat$res1n_sac)
+plot(mydat$xc, mydat$yc, cex=abs(mydat$res1n_sac), pch=16, 
+     col=gray.colors(n=length(mydat$res1n_sac))[order(mydat$res1n_sac)])
+cl_mod1_sac <- correlog(mydat$xc, mydat$yc, mydat$res1n_sac, increment=1, resamp=0)
 plot(cl_mod1_sac$correlation[1:20], type='o', pch=16, ylab='Moran\'s I', xlab='Distance')
-vg1_sac <- variogram(res1_sac ~ 1, data=mydat)
-plot(vg1_sac$dist, vg1_sac$gamma, type='o', pch=16)
-vario.GLS <- Variogram(mod1_sac, form=~xc+yc, robust=T, maxDist=2000, resType='pearson')
-plot(vario.GLS, smooth=T)
+vg1_sac <- variogram(res1n_sac ~ 1, data=mydat)
+plot(vg1_sac$dist, vg1_sac$gamma, pch=16, ylim=c(0,max(vg1_sac$gamma)))
+lines(vg1_sac$dist, loess(gamma~dist, data=vg1_sac)$fit, col='grey')
+vario.GLS <- Variogram(mod1_sac, form=~xc+yc, robust=T, maxDist=2000, resType='normalized')
+plot(vario.GLS$dist, vario.GLS$variog, pch=16, ylim=c(0,max(vario.GLS$variog)))
+lines(vario.GLS$dist, loess(variog~dist, data=vario.GLS)$fit, col='grey')
+
+# Check model fit formally:
+AIC(mod1, mod1_sac)
+
