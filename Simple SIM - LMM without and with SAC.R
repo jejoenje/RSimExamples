@@ -1,4 +1,5 @@
 opar <- par()
+library(MASS) # for mvrnorm()
 library(lme4)
 library(sp)   # for bubble()
 
@@ -39,6 +40,34 @@ fixef(mod_lmer_ns)
 VarCorr(mod_lmer_ns)
 # Dispersion estimate a la Zuur:
 dispZuur(mod_lmer_ns)
+# Residuals against fitted:
+par(mfrow=c(1,2))
+plot(fitted(mod_lmer_ns),resid(mod_lmer_ns, type='pearson'))
+# See if I can correctly calculate residuals.
+# First, check predictions:
+my_fit <- model.matrix(mod_lmer_ns) %*% fixef(mod_lmer_ns)
+plot(my_fit, predict(mod_lmer_ns))
+# Mmm. Nope.
+my_fit <- model.matrix(mod_lmer_ns) %*% fixef(mod_lmer_ns)
+# Match RE BLUP:
+mydat$re1 <- ranef(mod_lmer_ns)$site[[1]][match(mydat$site, row.names(ranef(mod_lmer_ns)$site))]
+my_fit <- my_fit+mydat$re1
+plot(my_fit, predict(mod_lmer_ns)); abline(a=0, b=1, col='red')
+# Bingo! So, by default, predict.lmer ADDS the BLUPs for each site, so in effect
+#  the fitted predictions are specific to sites.
+plot(my_fit, fitted(mod_lmer_ns)); abline(a=0, b=1, col='red')
+# So how to work out residuals?
+plot(mydat$y-fitted(mod_lmer_ns), resid(mod_lmer_ns)); abline(a=0, b=1,col='red')
+# Spot on! So which is the default resid()?
+plot(mydat$y-fitted(mod_lmer_ns), resid(mod_lmer_ns, type='pearson')); abline(a=0, b=1,col='red')
+plot(mydat$y-fitted(mod_lmer_ns), resid(mod_lmer_ns, type='working')); abline(a=0, b=1,col='red')
+plot(mydat$y-fitted(mod_lmer_ns), resid(mod_lmer_ns, type='response')); abline(a=0, b=1,col='red')
+plot(mydat$y-fitted(mod_lmer_ns), resid(mod_lmer_ns, type='deviance')); abline(a=0, b=1,col='red')
+# All the same??
+plot(resid(mod_lmer_ns, type='pearson'), resid(mod_lmer_ns, type='working'))
+plot(resid(mod_lmer_ns, type='pearson'), resid(mod_lmer_ns, type='response'))
+plot(resid(mod_lmer_ns, type='pearson'), resid(mod_lmer_ns, type='deviance'))
+# ...apparently...
 
 # Do the above a bunch of times to see how well the estimation works:
 #  (SAVED AS OBJECT, ONLY RUN IF NEEDED - LOAD COMMAND BELOW)
@@ -227,7 +256,7 @@ parset1 <-list(
   a=1,
   b=2,
   n_site=20,
-  n_obs_site=25)
+  n_obs_site=100)
 
 # Simulate some mixed-effects data with spatially independent response y and spatially correlated
 #  response y_sp:

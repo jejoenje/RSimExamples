@@ -18,9 +18,81 @@ dplot <- function(dvect, pval, pname='') {
 #   degrees of freedom, and should ideally be near 1.
 # Note that this is a rough estimate only as arguably this underestimates the number
 #   of "parameters" inferred by the random structure of any model.
-dispZuur <- function(mod) {
-  return(sum(resid(mod, type='pearson')^2)/(nrow(model.matrix(mod))-attr(logLik(mod),'df')))
+dispZuur <- function(mod, restype='pearson') {
+  if(restype=='pearson' | restype=='deviance') {
+    if(restype=='pearson') {
+      return(sum(resid(mod, type='pearson')^2)/(nrow(model.matrix(mod))-attr(logLik(mod),'df')))  
+    }
+    if(restype=='deviance') {
+      return(sum(resid(mod, type='deviance')^2)/(nrow(model.matrix(mod))-attr(logLik(mod),'df')))  
+    }
+  } else {
+    print('Error - residual type should be either \'pearson\' or \'deviance\'')
+  }
 }
+
+r2mm <- function(mod) {
+  if(is(mod,'glmerMod')) {
+    mod_fam <- family(mod)$family
+    mod_lnk <- family(mod)$link
+  }
+  if(is(mod,'glmmadmb')) {
+    mod_fam <- mod$family
+    mod_lnk <- mod$link
+  }
+  re_vars <- unlist(VarCorr(mod))
+  fe_var <- var(model.matrix(mod) %*% fixef(mod))
+  
+  if(!exists('mod_fam')) stop(paste('Not implemented for',class(mod)[1],'objects!'))
+  
+  ### BINOMIAL FIT
+  
+  if (mod_fam=='binomial'|mod_fam=='binom') { 
+    
+    mod_check <- TRUE
+  
+    if(!exists('mod_lnk')) stop('Link function not defined? Not returned from model object.')
+    
+    if(mod_lnk=='logit') { 
+      r2m <- fe_var/(fe_var+sum(re_vars)+(pi/3))
+      r2c <- (fe_var+sum(re_vars))/(fe_var+sum(re_vars)+(pi/3))
+    }
+    
+    if(mod_lnk=='probit') {
+      r2m <- fe_var/(fe_var+sum(re_vars)+1)
+      r2c <- (fe_var+sum(re_vars))/(fe_var+sum(re_vars)+1)
+    }
+    
+    if(!exists('r2m')) stop(paste('Link function (',mod_lnk,') not defined!'))
+  
+  }
+  
+  ### POISSON FIT
+  
+  #   if (mod_fam=='poisson') { 
+  #     
+  #     mod_check <- TRUE
+  #     
+  #   }
+  
+  ### NORMAL FIT
+  
+  #   if (mod_fam=='gaussian') { 
+  #     
+  #     mod_check <- TRUE
+  #     
+  #   }
+  
+  if(!exists('mod_check')) stop('Family not defined!')
+
+  temp <- data.frame(Variance=round(c(fe_var, re_vars),4))
+  row.names(temp) <- c('Fixed',names(re_vars))
+  print(temp)
+  #print(data.frame('Type'=c('Marginal (fixed)','Conditional (fixed+random)'),'R2'=round(c(r2m,r2c),4)),row.names=F)
+  data.frame('R2'=round(c(r2m,r2c),4),row.names=c('Marginal','Conditional'))
+}
+
+
 
 # Plot semivariance (variogram) plot from variogram() data and add Loess smoother
 # Bypasses horrible non-base graphic plot
