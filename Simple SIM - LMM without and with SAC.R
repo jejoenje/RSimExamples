@@ -1,3 +1,4 @@
+rm(list=ls())
 opar <- par()
 library(MASS) # for mvrnorm()
 library(lme4)
@@ -14,9 +15,9 @@ parset1 <-list(
   ycmin=0,
   ycmax=1000,
   rho=0.01,
-  re_sd=2,
+  re_sd=1,
   e_sp_sd=4,
-  e=1,
+  e=2,
   a=1,
   b=2,
   n_site=20,
@@ -31,6 +32,9 @@ mydat <- do.call(sim_lmm_sp, parset1)
 # First lets consider the non-spatially correlated data y.
 # This should just fit with a straightforward mixed effects model.
 mod_lmer_ns <- lmer(y ~ x + (1|site), data=mydat, REML=F)
+
+#R2 test:
+r2mm(mod_lmer_ns)
 
 # All model estimates:
 summary(mod_lmer_ns)

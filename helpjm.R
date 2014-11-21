@@ -40,14 +40,19 @@ r2mm <- function(mod) {
     mod_fam <- mod$family
     mod_lnk <- mod$link
   }
-  re_vars <- unlist(VarCorr(mod))
-  fe_var <- var(model.matrix(mod) %*% fixef(mod))
+  if(is(mod,'lmerMod')) {
+    mod_fam <- family(mod_lmer_ns)$family
+    mod_lnk <- family(mod_lmer_ns)$link
+  }
   
   if(!exists('mod_fam')) stop(paste('Not implemented for',class(mod)[1],'objects!'))
   
   ### BINOMIAL FIT
   
   if (mod_fam=='binomial'|mod_fam=='binom') { 
+
+    re_vars <- unlist(VarCorr(mod))
+    fe_var <- var(model.matrix(mod) %*% fixef(mod))
     
     mod_check <- TRUE
   
@@ -65,6 +70,8 @@ r2mm <- function(mod) {
     
     if(!exists('r2m')) stop(paste('Link function (',mod_lnk,') not defined!'))
   
+    temp <- data.frame(Variance=round(c(fe_var, re_vars),4))
+    row.names(temp) <- c('Fixed',names(re_vars))
   }
   
   ### POISSON FIT
@@ -75,18 +82,24 @@ r2mm <- function(mod) {
   #     
   #   }
   
-  ### NORMAL FIT
+  ### GAUSSIAN FIT
   
-  #   if (mod_fam=='gaussian') { 
-  #     
-  #     mod_check <- TRUE
-  #     
-  #   }
+  if (mod_fam=='gaussian') { 
+    
+    re_vars <- unlist(VarCorr(mod))
+    fe_var <- var(model.matrix(mod) %*% fixef(mod))
+    
+    r2m <- fe_var/(fe_var+sum(re_vars)+attr(VarCorr(mod),'sc')^2)
+    r2c <- (fe_var+sum(re_vars))/(fe_var+sum(re_vars)+attr(VarCorr(mod),'sc')^2)
+    
+    mod_check <- TRUE
+    
+    temp <- data.frame(Variance=round(c(fe_var, re_vars, attr(VarCorr(mod),'sc')^2),4))
+    row.names(temp) <- c('Fixed',as.data.frame(VarCorr(mod))$grp)
+  }
   
   if(!exists('mod_check')) stop('Family not defined!')
 
-  temp <- data.frame(Variance=round(c(fe_var, re_vars),4))
-  row.names(temp) <- c('Fixed',names(re_vars))
   print(temp)
   #print(data.frame('Type'=c('Marginal (fixed)','Conditional (fixed+random)'),'R2'=round(c(r2m,r2c),4)),row.names=F)
   data.frame('R2'=round(c(r2m,r2c),4),row.names=c('Marginal','Conditional'))
@@ -117,4 +130,5 @@ plotbubble <- function(x, y, z, size=1, xlab='x', ylab='y', alpha=NULL, axt='') 
     plot(x, y, col=cols, pch=16, cex=(abs(scale(z))+1)*size, xlab=xlab, ylab=ylab)    
   }
 }
+
 
