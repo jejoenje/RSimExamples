@@ -3,84 +3,80 @@ opar <- par()
 library(MASS) # for mvrnorm()
 library(lme4)
 library(sp)   # for bubble()
+library(gstat)
 
-source('sim_lmm_sp.R')
-source('sim_lmm_sp2.R')
+source('sim_lmm_sp3.R')
 source('helpjm.r')
 
 # Parameters for simulations, definitions in sim_lmm_sp.R:
-parset1 <-list(
+parset <-list(
   xcmin=0,
   xcmax=1000,
   ycmin=0,
   ycmax=1000,
   rho=0.01,
   re_sd=1,
-  e_sp_sd=4,
-  e=2,
+  e_sp_sd=1,
+  e=1,
   a=1,
   b=2,
   n_site=20,
   n_obs_site=25)
 
-# Simulate some mixed-effects data with spatially independent response y and spatially correlated
-#  response y_sp:
-mydat <- do.call(sim_lmm_sp, parset1)
+# Simulate some mixed-effects data with spatially independent response y:
+parset1 <- c(parset, 'sp'=FALSE, 'spcor'=FALSE)
+mydat <- do.call(sim_lmm_sp3, parset1)
 
-
-#####################
-# First lets consider the non-spatially correlated data y.
-# This should just fit with a straightforward mixed effects model.
-mod_lmer_ns <- lmer(y ~ x + (1|site), data=mydat, REML=F)
+# Fit model:
+mod1 <- lmer(y ~ x + (1|site), data=mydat, REML=F)
 
 #R2 test:
-r2mm(mod_lmer_ns)
-
+r2mm(mod1)
 # All model estimates:
-summary(mod_lmer_ns)
+summary(mod1)
 # Fixed effect estimates:
-fixef(mod_lmer_ns)
+fixef(mod1)
 # Random effect SD estimates:
-VarCorr(mod_lmer_ns)
+VarCorr(mod1)
 # Dispersion estimate a la Zuur:
-dispZuur(mod_lmer_ns)
+dispZuur(mod1)
 # Residuals against fitted:
 par(mfrow=c(1,2))
-plot(fitted(mod_lmer_ns),resid(mod_lmer_ns, type='pearson'))
+plot(fitted(mod1),resid(mod1, type='pearson'))
 # See if I can correctly calculate residuals.
 # First, check predictions:
-my_fit <- model.matrix(mod_lmer_ns) %*% fixef(mod_lmer_ns)
-plot(my_fit, predict(mod_lmer_ns))
+my_fit <- model.matrix(mod1) %*% fixef(mod1)
+plot(my_fit, predict(mod1))
 # Mmm. Nope.
-my_fit <- model.matrix(mod_lmer_ns) %*% fixef(mod_lmer_ns)
+my_fit <- model.matrix(mod1) %*% fixef(mod1)
 # Match RE BLUP:
-mydat$re1 <- ranef(mod_lmer_ns)$site[[1]][match(mydat$site, row.names(ranef(mod_lmer_ns)$site))]
+mydat$re1 <- ranef(mod1)$site[[1]][match(mydat$site, row.names(ranef(mod1)$site))]
 my_fit <- my_fit+mydat$re1
-plot(my_fit, predict(mod_lmer_ns)); abline(a=0, b=1, col='red')
+plot(my_fit, predict(mod1)); abline(a=0, b=1, col='red')
 # Bingo! So, by default, predict.lmer ADDS the BLUPs for each site, so in effect
 #  the fitted predictions are specific to sites.
-plot(my_fit, fitted(mod_lmer_ns)); abline(a=0, b=1, col='red')
+plot(my_fit, fitted(mod1)); abline(a=0, b=1, col='red')
 # So how to work out residuals?
-plot(mydat$y-fitted(mod_lmer_ns), resid(mod_lmer_ns)); abline(a=0, b=1,col='red')
+plot(mydat$y-fitted(mod1), resid(mod1)); abline(a=0, b=1,col='red')
 # Spot on! So which is the default resid()?
-plot(mydat$y-fitted(mod_lmer_ns), resid(mod_lmer_ns, type='pearson')); abline(a=0, b=1,col='red')
-plot(mydat$y-fitted(mod_lmer_ns), resid(mod_lmer_ns, type='working')); abline(a=0, b=1,col='red')
-plot(mydat$y-fitted(mod_lmer_ns), resid(mod_lmer_ns, type='response')); abline(a=0, b=1,col='red')
-plot(mydat$y-fitted(mod_lmer_ns), resid(mod_lmer_ns, type='deviance')); abline(a=0, b=1,col='red')
+plot(mydat$y-fitted(mod1), resid(mod1, type='pearson')); abline(a=0, b=1,col='red')
+plot(mydat$y-fitted(mod1), resid(mod1, type='working')); abline(a=0, b=1,col='red')
+plot(mydat$y-fitted(mod1), resid(mod1, type='response')); abline(a=0, b=1,col='red')
+plot(mydat$y-fitted(mod1), resid(mod1, type='deviance')); abline(a=0, b=1,col='red')
 # All the same??
-plot(resid(mod_lmer_ns, type='pearson'), resid(mod_lmer_ns, type='working'))
-plot(resid(mod_lmer_ns, type='pearson'), resid(mod_lmer_ns, type='response'))
-plot(resid(mod_lmer_ns, type='pearson'), resid(mod_lmer_ns, type='deviance'))
+plot(resid(mod1, type='pearson'), resid(mod1, type='working'))
+plot(resid(mod1, type='pearson'), resid(mod1, type='response'))
+plot(resid(mod1, type='pearson'), resid(mod1, type='deviance'))
 # ...apparently...
 
 # Do the above a bunch of times to see how well the estimation works:
 #  (SAVED AS OBJECT, ONLY RUN IF NEEDED - LOAD COMMAND BELOW)
 
 # ests <- as.data.frame(NULL)
-# K <- 1000
+# K <- 100
 # pb <- txtProgressBar(min=0, max=K, style=3)
 # for(i in 1:K) {
-#   nwdat <- do.call(sim_lmm_sp, parset1)
+#   nwdat <- do.call(sim_lmm_sp3, parset1)
 #   nwmod <- lmer(y ~ x + (1|site), data=nwdat, REML=F)
 #   nwests <- c(as.vector(fixef(nwmod)),
 #               as.data.frame(VarCorr(nwmod))[,'sdcor'],
@@ -114,10 +110,13 @@ mod1vg <- variogram(E ~ 1, data=mydat)
 plotvario(mod1vg)
 
 #####################
-# Now consider the spatially correlated data y_sp.
-# This should just fit with a straightforward mixed effects model.
-mydat <- as.data.frame(mydat)
-mod1_sp <- lmer(y_sp ~ x + (1|site), data=mydat, REML=F)
+# Now consider spatially correlated data - but with RE and SAC independent:
+
+parset2 <- c(parset, 'sp'=TRUE, 'spcor'=FALSE)
+mydat2 <- do.call(sim_lmm_sp3, parset2)
+
+# Model w/o taking SAC into account:
+mod1_sp <- lmer(y ~ x + (1|site), data=mydat2, REML=F)
 
 # All model estimates:
 summary(mod1_sp)
@@ -134,22 +133,22 @@ plot(resid(mod1_sp), fitted(mod1_sp, type='response'))
 # Histogram of residuals
 hist(resid(mod1_sp))
 # Residuals on a map:
-mydat$E_sp <- resid(mod1_sp)
-coordinates(mydat) <- c('xc','yc')
-bubble(mydat, 'E_sp', col=c('black','grey'), main='D-residuals', xlab='X',ylab='Y')
+mydat2$E_sp <- resid(mod1_sp)
+coordinates(mydat2) <- c('xc','yc')
+bubble(mydat2, 'E_sp', col=c('black','grey'), main='D-residuals', xlab='X',ylab='Y')
 # Variogram
-mod1_sp_vg <- variogram(E_sp ~ 1, data=mydat)
+mod1_sp_vg <- variogram(E_sp ~ 1, data=mydat2)
 plotvario(mod1_sp_vg)
 
 # Run a simulation series as above:
 #  (SAVED AS OBJECT, ONLY RUN IF NEEDED - LOAD COMMAND BELOW)
 
 # ests_sp <- as.data.frame(NULL)
-# K <- 1000
+# K <- 100
 # pb <- txtProgressBar(min=0, max=K, style=3)
 # for(i in 1:K) {
-#   nwdat <- do.call(sim_lmm_sp, parset1)
-#   nwmod <- lmer(y_sp ~ x + (1|site), data=nwdat, REML=F)
+#   nwdat <- do.call(sim_lmm_sp3, parset2)
+#   nwmod <- lmer(y ~ x + (1|site), data=nwdat, REML=F)
 #   nwests <- c(as.vector(fixef(nwmod)),
 #               as.data.frame(VarCorr(nwmod))[,'sdcor'],
 #               dispZuur(nwmod))
@@ -162,11 +161,13 @@ plotvario(mod1_sp_vg)
 
 load('sim_lmm_sp_1.Rdata')
 par(mfrow=c(2,3))
-dplot(ests_sp[,'a'],parset1$a,'a')
-dplot(ests_sp[,'b'],parset1$b,'b')
-dplot(ests_sp[,'re_sd'],parset1$re_sd,'re_sd')
-dplot(ests_sp[,'e_sd'],parset1$e,'e_sd')
+dplot(ests_sp[,'a'],parset2$a,'a')
+dplot(ests_sp[,'b'],parset2$b,'b')
+dplot(ests_sp[,'re_sd'],parset2$re_sd,'re_sd')
+dplot(ests_sp[,'e_sd'],parset2$e,'e_sd')
 dplot(ests_sp[,'disp'],1,'disp')
+
+
 
 
 ###

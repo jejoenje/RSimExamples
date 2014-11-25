@@ -41,8 +41,8 @@ r2mm <- function(mod) {
     mod_lnk <- mod$link
   }
   if(is(mod,'lmerMod')) {
-    mod_fam <- family(mod_lmer_ns)$family
-    mod_lnk <- family(mod_lmer_ns)$link
+    mod_fam <- family(mod)$family
+    mod_lnk <- family(mod)$link
   }
   
   if(!exists('mod_fam')) stop(paste('Not implemented for',class(mod)[1],'objects!'))
