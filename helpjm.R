@@ -111,12 +111,18 @@ r2mm <- function(mod) {
 # Bypasses horrible non-base graphic plot
 #
 # Argument ymax can set maximum value for y axis
-plotvario <- function(vgdat, ymax=NULL) {
+plotvario <- function(vgdat, ymax=NULL, axes=TRUE) {
   if (is.null(ymax)) {
     ymax <- max(vgdat$gamma)
   }
-  plot(vgdat$dist, vgdat$gamma, ylim=c(0,ymax), 
-       pch=16, xlab='Distance',ylab='Semivariance')
+  if(axes==TRUE) {
+    plot(vgdat$dist, vgdat$gamma, ylim=c(0,ymax), 
+         pch=16, xlab='Distance',ylab='Semivariance')
+  }
+  if(axes==FALSE) {
+    plot(vgdat$dist, vgdat$gamma, ylim=c(0,ymax), 
+         pch=16, xlab='Distance',ylab='Semivariance', yaxt='n', xaxt='n')
+  }
   lines(vgdat$dist, loess(gamma~dist, data=vgdat)$fit, col='grey')
 }
 

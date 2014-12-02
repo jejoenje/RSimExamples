@@ -8,7 +8,7 @@ library(gstat)
 source('sim_lmm_sp3.R')
 source('helpjm.r')
 
-# Parameters for simulations, definitions in sim_lmm_sp.R:
+# Parameters for simulations, definitions in sim_lmm_sp3.R:
 parset <-list(
   xcmin=0,
   xcmax=1000,
@@ -21,10 +21,11 @@ parset <-list(
   a=1,
   b=2,
   n_site=20,
-  n_obs_site=25)
+  n_obs_site=25
+  )
 
 # Simulate some mixed-effects data with spatially independent response y:
-parset1 <- c(parset, 'sp'=FALSE, 'spcor'=FALSE)
+parset1 <- c(parset, 'sp'=FALSE, 'spcor'=FALSE, site_scale=100)
 mydat <- do.call(sim_lmm_sp3, parset1)
 
 # Fit model:
@@ -59,6 +60,7 @@ plot(my_fit, fitted(mod1)); abline(a=0, b=1, col='red')
 # So how to work out residuals?
 plot(mydat$y-fitted(mod1), resid(mod1)); abline(a=0, b=1,col='red')
 # Spot on! So which is the default resid()?
+par(mfrow=c(2,2))
 plot(mydat$y-fitted(mod1), resid(mod1, type='pearson')); abline(a=0, b=1,col='red')
 plot(mydat$y-fitted(mod1), resid(mod1, type='working')); abline(a=0, b=1,col='red')
 plot(mydat$y-fitted(mod1), resid(mod1, type='response')); abline(a=0, b=1,col='red')
@@ -88,7 +90,7 @@ plot(resid(mod1, type='pearson'), resid(mod1, type='deviance'))
 # names(ests) <- c('a','b','re_sd','e_sd','disp')
 # save(ests, file='sim_lmm_1.Rdata')
 
-load('sim_lmm_1.Rdata')
+#load('sim_lmm_1.Rdata')
 par(mfrow=c(2,3))
 dplot(ests[,'a'],parset1$a,'a')
 dplot(ests[,'b'],parset1$b,'b')
@@ -97,6 +99,7 @@ dplot(ests[,'e_sd'],parset1$e,'e_sd')
 dplot(ests[,'disp'],1,'disp')
 
 # Try some diag plots:
+par(mfrow=c(2,2))
 # Residuals against fitted:
 plot(resid(mod1), fitted(mod1, type='response'))
 # Histogram of residuals
@@ -104,7 +107,7 @@ hist(resid(mod1))
 # Residuals on a map:
 mydat$E <- resid(mod1)
 coordinates(mydat) <- c('xc','yc')
-bubble(mydat, 'E', col=c('black','grey'), main='D-residuals', xlab='X',ylab='Y')
+plotbubble(mydat$xc, mydat$yc, mydat$E)
 # Variogram
 mod1vg <- variogram(E ~ 1, data=mydat)
 plotvario(mod1vg)
@@ -128,6 +131,7 @@ VarCorr(mod1_sp)
 dispZuur(mod1_sp)
 
 # Try some diag plots:
+par(mfrow=c(2,2))
 # Residuals against fitted:
 plot(resid(mod1_sp), fitted(mod1_sp, type='response'))
 # Histogram of residuals
@@ -135,7 +139,7 @@ hist(resid(mod1_sp))
 # Residuals on a map:
 mydat2$E_sp <- resid(mod1_sp)
 coordinates(mydat2) <- c('xc','yc')
-bubble(mydat2, 'E_sp', col=c('black','grey'), main='D-residuals', xlab='X',ylab='Y')
+plotbubble(mydat2$xc, mydat2$yc, mydat2$E_sp)
 # Variogram
 mod1_sp_vg <- variogram(E_sp ~ 1, data=mydat2)
 plotvario(mod1_sp_vg)
@@ -174,32 +178,38 @@ dplot(ests_sp[,'disp'],1,'disp')
 ### Now how does clustering of sites in space affect the above.
 ###
 rm(list=ls())
-source('sim_lmm_sp.R')
-source('sim_lmm_sp2.R')
+opar <- par()
+library(MASS) # for mvrnorm()
+library(lme4)
+library(sp)   # for bubble()
+library(gstat)
+source('sim_lmm_sp3.R')
 source('helpjm.r')
 
-# Parameters for simulations, definitions in sim_lmm_sp.R:
-parset1 <-list(
+# Parameters for simulations, definitions in sim_lmm_sp3.R:
+parset <-list(
   xcmin=0,
   xcmax=1000,
   ycmin=0,
   ycmax=1000,
   rho=0.01,
-  re_sd=2,
-  e_sp_sd=4,
+  re_sd=1,
+  e_sp_sd=1,
   e=1,
   a=1,
   b=2,
   n_site=20,
-  n_obs_site=100)
+  n_obs_site=100
+)
 
-# Simulate some mixed-effects data with spatially independent response y and spatially correlated
-#  response y_sp:
-mydat2 <- do.call(sim_lmm_sp2, parset1)
-plot(mydat2$xc, mydat2$yc)
+# Simulate some mixed-effects data with spatially correlated errors and these
+#  are 'clustered' w/i sites:
+parset3 <- c(parset, 'sp'=TRUE, 'spcor'=TRUE, 'site_scale'=100)
+mydat3 <- do.call(sim_lmm_sp3, parset3)
+plot(mydat3$xc, mydat3$yc)
 
 # Fit LMM on SAC but not accounting for this:
-mod2_sp <- lmer(y_sp ~ x + (1|site), data=mydat2, REML=F)
+mod2_sp <- lmer(y ~ x + (1|site), data=mydat3, REML=F)
 
 # All model estimates:
 summary(mod2_sp)
@@ -211,31 +221,60 @@ VarCorr(mod2_sp)
 dispZuur(mod2_sp)
 
 # Try some diag plots:
+par(mfrow=c(2,2))
 # Residuals against fitted:
 plot(resid(mod2_sp), fitted(mod2_sp, type='response'))
 # Histogram of residuals
 hist(resid(mod2_sp))
 # Residuals on a map:
-mydat2$E2_sp <- resid(mod2_sp)
-coordinates(mydat2) <- c('xc','yc')
-bubble(mydat2, 'E2_sp', col=c('black','grey'), main='D-residuals', xlab='X',ylab='Y')
-plotbubble(mydat2$xc, mydat2$yc, mydat2$E2_sp)
-# example for a single site:
-# site4 <- mydat2[mydat2$site==levels(mydat2$site)[4],]
-# bubble(site4, 'E2_sp', col=c('black','grey'), main='D-residuals', xlab='X',ylab='Y')
-# plotbubble(site4$xc, site4$yc, site4$E2_sp)
-# Plot all sites:
+mydat3$E2_sp <- resid(mod2_sp)
+coordinates(mydat3) <- c('xc','yc')
+plotbubble(mydat3$xc, mydat3$yc, mydat3$E2_sp)
+# Variogram - I don't think this works right. Don't think these are the residuals that we need.
+mod2_sp_vg <- variogram(E2_sp ~ 1, data=mydat3)
+plotvario(mod2_sp_vg)
+
+# Bubble plots per site:
 par(mfrow=c(4,5))
 par(mar=c(0.5,0.5,0.5,0.5))
-for(i in 1:nlevels(mydat2$site)) {
-  sitedat <- mydat2[mydat2$site==levels(mydat2$site)[i],]
+for(i in 1:nlevels(mydat3$site)) {
+  sitedat <- mydat3[mydat3$site==levels(mydat3$site)[i],]
   plotbubble(sitedat$xc, sitedat$yc, sitedat$E2_sp, axt='n', xlab='', ylab='')
 }; par(opar)
 
-# Variogram - I don't think this works right. Don't think these are the residuals that we need.
-mod2_sp_vg <- variogram(E2_sp ~ 1, data=mydat2)
-plotvario(mod2_sp_vg)
+# Variograms per site:
+par(mfrow=c(4,5))
+par(mar=c(0.5,0.5,0.5,0.5))
+for(i in 1:nlevels(mydat3$site)) {
+  sitedat <- mydat3[mydat3$site==levels(mydat3$site)[i],]
+  plotvario(variogram(E2_sp ~ 1, data=sitedat), axes=F)
+}; par(opar)
 
+# Simulate a series as above:
+
+ests_sp <- as.data.frame(NULL)
+K <- 100
+pb <- txtProgressBar(min=0, max=K, style=3)
+for(i in 1:K) {
+  nwdat <- do.call(sim_lmm_sp3, parset3)
+  nwmod <- lmer(y ~ x + (1|site), data=nwdat, REML=F)
+  nwests <- c(as.vector(fixef(nwmod)),
+              as.data.frame(VarCorr(nwmod))[,'sdcor'],
+              dispZuur(nwmod))
+  ests_sp <- rbind(ests_sp, t(data.frame(nwests)))
+  setTxtProgressBar(pb,i)
+}
+close(pb)
+names(ests_sp) <- c('a','b','re_sd','e_sd','disp')
+save(ests_sp, file='sim_lmm_sp_3.Rdata')
+
+load('sim_lmm_sp_3.Rdata')
+par(mfrow=c(2,3))
+dplot(ests_sp[,'a'],parset2$a,'a')
+dplot(ests_sp[,'b'],parset2$b,'b')
+dplot(ests_sp[,'re_sd'],parset2$re_sd,'re_sd')
+dplot(ests_sp[,'e_sd'],parset2$e,'e_sd')
+dplot(ests_sp[,'disp'],1,'disp')
 
 ### So to check the above problem, try fitting the same model but with nlme
 # First clear the decks.
