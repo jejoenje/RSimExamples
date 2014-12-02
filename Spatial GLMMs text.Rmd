@@ -1,0 +1,65 @@
+---
+title: "Fitting Gaussian mixed effects models to spatially autocorrelated data"
+author: "Jeroen Minderman"
+date: "Tuesday, December 02, 2014"
+output: 
+  html_document:
+    theme: journal
+---
+
+```{r echo=F, results='hide', message=F, warning=F}
+setwd("H:/docs/000_R/RSimExamples")
+library(MASS) # for mvrnorm()
+library(lme4)
+library(sp)   # for bubble()
+library(gstat)
+source('sim_lmm_sp3.R')
+source('helpjm.r')
+
+# Parameters for simulations, definitions in sim_lmm_sp3.R:
+parset <-list(
+  xcmin=0,
+  xcmax=1000,
+  ycmin=0,
+  ycmax=1000,
+  rho=0.01,
+  re_sd=1,
+  e_sp_sd=1,
+  e=1,
+  a=1,
+  b=2,
+  n_site=20,
+  n_obs_site=25
+  )
+# Simulate some mixed-effects data with spatially independent response y:
+parset1 <- c(parset, 'sp'=FALSE, 'spcor'=FALSE, site_scale=100)
+mydat <- do.call(sim_lmm_sp3, parset1)
+# Fit model:
+mod1 <- lmer(y ~ x + (1|site), data=mydat, REML=F)
+```
+
+## Background
+  
+The usual approach to fitting linear models to data that exhibit spatial autocorrelation is to include variance structures that account for any residual correlation **[REF]**. This is usually illustrated using data without any additional error terms or correlated errors (that is, using conventional general or generalised linear models), and the presence (or absence) of any spatial correlation in the residuals can be easily assessed using variograms and/or "bubble" plots of the residuals.  
+By contrast, when a data set not only exhibits spatial autocorrelation, but also contains correlations that are caused by e.g. multiple measures from individuals, groups or sites, things become more complicated. Independence of errors due to repeated measures from groups (or individuals, or sites) is commonly dealt with by including a random term, yielding a mixed effects model (GLMM). Although methods exist to fit GLMMs with additional spatial autocorrelation accounted for **[REF]**, interpretation of both variograms and "bubble" plots of residuals is not as intuitive as in "simple" linear models, making the identification of the presence of residual spatial autocorrelation challenging. Moreover, it is possible that in some cases the random effect terms to a large extent masks or 'mops up' all of the variation that would otherwise be accounted for by the spatial correlation. For example, if measurements are taken at a number of locations within a number of sites (so that measurements within sites are spatially clustered, and physically closer to each other than measurements from different sites) the repeated measurements per site could be accounted for by including a random effect for site. Any remaining spatial autocorrelation *within* each site could and should be accounted for by an additional spatial correlation structure. However, if measurements are "clustered" within sites, it is possible that any such remaining spatial autocorrelation -even if present- is difficult detect, and therefore likely to be missed.  
+Here, we provide examples of how and when residual spatial autocorrelation may be difficult to detect when fitting GLMMs, and suggest approaches that avoid common pitfalls when doing so. Specifically, we aim to assess: 
+
+1. How the degree of spatial clustering (as well as the strength of the autocorrelation relative to the clustering) can affect the ability to detect residual spatial correlation;    
+2. The importance of within-group (or within-site) sample size in the ability to detect residual spatial autocorrelation.    
+
+To address the above aims, we generate simulated mixed-effect data with a single random effect (groups or sites) and with and without additional spatial correlation of known strength. In addition, we can either cluster individual observations within sites (referred to as the "clustered" scenario below) or keep the random term entirely independent of the spatial correlation (referred to as the "independent" scenario below). Whereas the former scenario is best visualised as individual measurements spatially clustered within sites, the latter scenario could represent for example repeated measurements of a number of individuals through space, where measurements taken of any individual are more likely to be similar when closer together in space.  
+Finally, we make a number of practical recommendations for the analysis of spatially correlated "mixed effects" data.  
+
+## Simulations and Results
+  
+### Nested Gaussian data without spatial correlation
+  
+We simulated $J$ measurements from $I$ sites, so that $y_{i,j}$ is measurement $j$ from site $i$, as draws from a Normal distribution with standard deviation $\sigma_e^2$ and mean equal to a linear function of a common intercept $a$ and common slope $b$, and some predictor $X_{i,j}$:    
+
+$y_{i,j} = N(a + bX_{i,j} + a_i, \sigma_e^2)$    
+
+where   
+
+$a_i = N(0, \sigma_g^2)$
+
+Thus the term $a_i$ is normally distributed with a mean $0$ and a variance $\sigma_g^2$, representing between-group (or site) errors.
