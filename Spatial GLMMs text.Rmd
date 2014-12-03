@@ -69,15 +69,18 @@ with(mydat, plotbubble(xc, yc, y_i, xlab='X coordinate', ylab='Y coordinate', co
 To illustrate the consequences of ignoring the spatial structure in the data, we fit a simple linear model:  
 ``` {r}
 mod1 <- lm(y_i ~ X_i, data=mydat)
-kable(summary(mod1)$coef, digits=3)
+summary(mod1)$coef
 ```
-
-We simulated $J$ measurements from $I$ sites, so that $y_{i,j}$ is measurement $j$ from site $i$, as draws from a Normal distribution with standard deviation $\sigma_e^2$ and mean equal to a linear function of a common intercept $a$ and common slope $b$, and some predictor $X_{i,j}$:    
-
-$y_{i,j} = N(a + bX_{i,j} + a_i, \sigma_e^2)$    
-
-where   
-
-$a_i = N(0, \sigma_g^2)$
-
-Thus the term $a_i$ is normally distributed with a mean $0$ and a variance $\sigma_g^2$, representing between-group (or site) errors.
+ 
+Residual spatial correlation can be clearly detected using both a "bubble" plot of the residuals, as well as a variogram of the residuals. This could be addressed by fitting an appropriate model that can include specific variance structures to accomodate spatial dependence (e.g. gls *[REF]*).
+ 
+``` {r, echo=FALSE, warning=FALSE}
+library(gstat)
+library(sp)
+mydat$res1 <- resid(mod1)
+par(mfrow=c(1,2))
+with(mydat, plotbubble(xc, yc, res1))
+coordinates(mydat) <- c('xc','yc')
+with(mydat, plotvario(variogram(res1 ~ 1, data=mydat)))
+```
+ 
