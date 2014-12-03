@@ -5,9 +5,13 @@
 # Function to plot density curve of given vector dvect,
 #  adding a vertical line at some reference point pval and naming the
 #  plot 'pname'.
-dplot <- function(dvect, pval, pname='') {
+dplot <- function(dvect, pval, pname='', xlab=NULL) {
   d <- density(dvect)
-  plot(d, main=pname)
+  if(is.null(xlab)) {
+    plot(d, main=pname)
+  } else {
+    plot(d, main=pname, xlab=xlab)
+  }
   dmax <- max(d$y)
   lines(c(pval,pval),c(0,dmax),col='red',lty='dotted')
 }
@@ -126,10 +130,14 @@ plotvario <- function(vgdat, ymax=NULL, axes=TRUE) {
   lines(vgdat$dist, loess(gamma~dist, data=vgdat)$fit, col='grey')
 }
 
-plotbubble <- function(x, y, z, size=1, xlab='x', ylab='y', alpha=NULL, axt='') {
-  cols <- factor(sign(z))
-  levels(cols) <- c('grey','black')
-  cols <- as.vector(cols)
+plotbubble <- function(x, y, z, size=1, xlab='x', ylab='y', alpha=NULL, axt='', colsign=TRUE) {
+  if(colsign==TRUE) {
+    cols <- factor(sign(z))
+    levels(cols) <- c('grey','black')
+    cols <- as.vector(cols)  
+  } else {
+    cols <- rep('grey', length(z))
+  }
   if(axt=='n') {
     plot(x, y, col=cols, pch=16, cex=(abs(scale(z))+1)*size, xaxt='n',yaxt='n', xlab=xlab, ylab=ylab)
   } else {

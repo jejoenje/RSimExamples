@@ -8,34 +8,7 @@ output:
 ---
 
 ```{r echo=F, results='hide', message=F, warning=F}
-setwd("H:/docs/000_R/RSimExamples")
-library(MASS) # for mvrnorm()
-library(lme4)
-library(sp)   # for bubble()
-library(gstat)
-source('sim_lmm_sp3.R')
 source('helpjm.r')
-
-# Parameters for simulations, definitions in sim_lmm_sp3.R:
-parset <-list(
-  xcmin=0,
-  xcmax=1000,
-  ycmin=0,
-  ycmax=1000,
-  rho=0.01,
-  re_sd=1,
-  e_sp_sd=1,
-  e=1,
-  a=1,
-  b=2,
-  n_site=20,
-  n_obs_site=25
-  )
-# Simulate some mixed-effects data with spatially independent response y:
-parset1 <- c(parset, 'sp'=FALSE, 'spcor'=FALSE, site_scale=100)
-mydat <- do.call(sim_lmm_sp3, parset1)
-# Fit model:
-mod1 <- lmer(y ~ x + (1|site), data=mydat, REML=F)
 ```
 
 ## Background
@@ -52,14 +25,62 @@ Finally, we make a number of practical recommendations for the analysis of spati
 
 ## Simulations and Results
   
-### Nested Gaussian data without spatial correlation
-  
-We simulated $J$ measurements from $I$ sites, so that $y_{i,j}$ is measurement $j$ from site $i$, as draws from a Normal distribution with standard deviation $\sigma_e^2$ and mean equal to a linear function of a common intercept $a$ and common slope $b$, and some predictor $X_{i,j}$:    
+### Linear model data with spatial autocorrelation
 
-$y_{i,j} = N(a + bX_{i,j} + a_i, \sigma_e^2)$    
+To illustrate a basic data set with spatial autocorrelated errors but without further random effects, we first simulate $N$ measurements $y_i$ as a linear function of some predictor variable $X_i$ with common intercept $b_1$=1 and slope $b_2$=2, and two error terms: one residual error term $a_1,i$ and one spatial error term $a_2,i$
+ 
+$y_i = b_1 + b_2X_i + a_{1,i} + a_{2,i}$
+ 
+Where the residual error term $a_{1,i}$ is normally distributed with mean $\mu$=0 and standard deviation $\sigma_{\epsilon}$=1:  
+ 
+$a_1 ~ N(\mu = 0, \sigma_{\epsilon} = 1)$  
+ 
+And the spatial error term $a_{2,i}$ is drawn from a multivariate normal distribution with mean 0 and covariance matrix $\Sigma$ equal to:  
+ 
+$\Sigma = exp(-\rho d)\sigma_s^2$ 
+ 
+Where $d$ is a matrix of distances between observations (randomly drawn 'coordinates' x_c and y_c for each observation), so that the strength of the correlation between two observations decreases exponentially with distance and parameter $\rho$, and $\sigma_s^2$ is the spatial error variance. Data is simulated as follows:  
 
-where   
+```{r}
+source('helpjm.r')
+library(MASS)
+N <- 500
+b_1 <- 1
+b_2 <- 2
+e <- 1
+e_sp <- 1
+rho <- 0.01
+mydat <- data.frame('xc'=runif(N, 0, 1000), 
+                    'yc'=runif(N, 0, 1000),
+                    'X_i'=runif(N, 0, 5))
+a_1 <- rnorm(N, mean=0, sd=e)
+d <- with(mydat, as.matrix(dist(cbind(xc,yc))))
+a_2 <- mvrnorm(1, rep(0,N), exp(-rho*d)*e_sp^2)
+mydat$y_i <- b_1 + b_2*mydat$X_i + a_1 + a_2
 
-$a_i = N(0, \sigma_g^2)$
+```
+``` {r echo=FALSE, warning=FALSE}
+library(knitr)
+par(mfrow=c(1,2))
+with(mydat, plot(X_i, y_i))
+with(mydat, plotbubble(xc, yc, y_i, xlab='X coordinate', ylab='Y coordinate', colsign=FALSE, size=0.5))
+```  
 
-Thus the term $a_i$ is normally distributed with a mean $0$ and a variance $\sigma_g^2$, representing between-group (or site) errors.
+To illustrate the consequences of ignoring the spatial structure in the data, we fit a simple linear model:  
+``` {r}
+mod1 <- lm(y_i ~ X_i, data=mydat)
+summary(mod1)$coef
+```
+ 
+Residual spatial correlation can be clearly detected using both a "bubble" plot of the residuals, as well as a variogram of the residuals. This could be addressed by fitting an appropriate model that can include specific variance structures to accomodate spatial dependence (e.g. gls *[REF]*).
+ 
+``` {r, echo=FALSE, warning=FALSE}
+library(gstat)
+library(sp)
+mydat$res1 <- resid(mod1)
+par(mfrow=c(1,2))
+with(mydat, plotbubble(xc, yc, res1))
+coordinates(mydat) <- c('xc','yc')
+with(mydat, plotvario(variogram(res1 ~ 1, data=mydat)))
+```
+ 
