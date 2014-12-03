@@ -27,17 +27,17 @@ Finally, we make a number of practical recommendations for the analysis of spati
   
 ### Linear model data with spatial autocorrelation
 
-To illustrate a basic data set with spatial autocorrelated errors but without further random effects, we first simulate $N$ measurements $y_i$ as a linear function of some predictor variable $X_i$ with common intercept $b_1$=1 and slope $b_2$=2, and two error terms: one residual error term $a_1,i$ and one spatial error term $a_2,i$
+To illustrate a basic data set with spatial autocorrelated errors but without further random effects, we first simulate $N$ measurements $y_i$ as a linear function of some predictor variable $X_i$ with common intercept $b_1$=1 and slope $b_2$=2, and two error terms: one residual error term $a_{1,i}$ and one spatial error term $a_{2,i}$
  
 $y_i = b_1 + b_2X_i + a_{1,i} + a_{2,i}$
  
 Where the residual error term $a_{1,i}$ is normally distributed with mean $\mu$=0 and standard deviation $\sigma_{\epsilon}$=1:  
  
-$a_1 ~ N(\mu = 0, \sigma_{\epsilon} = 1)$  
+$a_{1,i} \sim N(\mu = 0, \sigma_{\epsilon} = 1)$  
  
-And the spatial error term $a_{2,i}$ is drawn from a multivariate normal distribution with mean 0 and covariance matrix $\Sigma$ equal to:  
+And the spatial error term $a_{2,i}$ is drawn from a multivariate normal distribution with mean 0 and covariance matrix $\Sigma$ :  
  
-$\Sigma = exp(-\rho d)\sigma_s^2$ 
+$a_{2,i}  = N(\mu = 0, \Sigma = exp(-\rho d)\sigma_s^2)$ 
  
 Where $d$ is a matrix of distances between observations (randomly drawn 'coordinates' x_c and y_c for each observation), so that the strength of the correlation between two observations decreases exponentially with distance and parameter $\rho$, and $\sigma_s^2$ is the spatial error variance. Data is simulated as follows:  
 
@@ -83,4 +83,4 @@ with(mydat, plotbubble(xc, yc, res1))
 coordinates(mydat) <- c('xc','yc')
 with(mydat, plotvario(variogram(res1 ~ 1, data=mydat)))
 ```
- 
+
