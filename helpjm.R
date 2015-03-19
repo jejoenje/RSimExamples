@@ -2,6 +2,14 @@
 
 # JM HELPER FUNCTIONS
 
+is.factor.df <- function(x) {
+  out <- as.vector(NULL)
+  for(i in 1:ncol(x)) {
+    out <- c(out, is.factor(x[,i]))
+  }
+  return(out)
+}
+
 # Function to plot density curve of given vector dvect,
 #  adding a vertical line at some reference point pval and naming the
 #  plot 'pname'.
@@ -145,4 +153,73 @@ plotbubble <- function(x, y, z, size=1, xlab='x', ylab='y', alpha=NULL, axt='', 
   }
 }
 
+### Replicate arm:sim():
+
+# This is a manual version of Gelman's sim() function.
+# sim_man <- function(mod, S) {
+#   sig.hat <- sigma(mod)   # Model estimated residual standard error
+#   V.beta <- vcov(mod)     # Model estimated variance-covariance matrix
+#   n <- nrow(as.data.frame(model.matrix(mod)))
+#   k <- attr(logLik(mod),'df')
+#   sigma <- as.vector(NULL)
+#   beta <- as.data.frame(NULL)
+#   for (s in 1:S) {
+#     sigma <- c(sigma, sig.hat*sqrt((n-k)/rchisq(1,n-k)))
+#     beta <- rbind(beta, mvrnorm(1, fixef(mod), V.beta*sigma[s]^2))
+#   }
+#   names(beta) <- names(fixef(mod))
+#   return(list(fixef=beta, sigma=sigma))
+# }
+# 
+# testmod <- glmer(OCC_PIPS ~ fSECTION*TURB + (1|SITE/TRSCT), data=bats_nona, 
+#                  family=binomial(link='cloglog'))
+# testmod <- standardize(testmod)
+# 
+# par(mfrow=c(3,4))
+# par(mar=c(1,1,1,1))
+# arm_sim <- density(attr(sim(testmod, 1000),'fixef')[,i])
+# man_sim <- density(sim_man(testmod, 1000)$fixef[,i])
+# for(i in 1:length(fixef(testmod))) {
+#   ylims <- max(c(arm_sim$y, man_sim$y))
+#   plot(arm_sim, main=names(fixef(testmod))[i])
+#   lines(man_sim,col='red')
+# }
+
+
+### BEN BOLKER PREDICTION FUNCTION STUFF:
+
+### http://rpubs.com/bbolker/glmmchapter
+
+### Getting predicted values from an lme4 model (or an MCMCglmm model) is fairly straightforward: 
+###  in this case by specifying re.form=NA we're saying that we want the population-level 
+###  prediction, i.e. setting the random effects to zero and getting a prediction for an 
+###  average (or unknown) block:
+
+# pframe <- data.frame(ttt=factor(levels(culcita_dat$ttt),
+# levels=levels(culcita_dat$ttt)))
+# cpred1 <- predict(cmod_lme4_L,re.form=NA,newdata=pframe,type="response")
+
+### Computing confidence intervals on the predicted values is relatively easy if we're 
+### willing to completely ignore the random effects, and the uncertainty of the random effects. 
+### Here is a generic function that extracts the relevant bits from a fitted model and returns 
+###  the confidence intervals for predictions:
+  
+#   easyPredCI <- function(model,newdata,alpha=0.05) {
+#     ## baseline prediction, on the linear predictor (logit) scale:
+#     pred0 <- predict(model,re.form=NA,newdata=newdata)
+#     ## fixed-effects model matrix for new data
+#     X <- model.matrix(formula(model,fixed.only=TRUE)[-2],
+#                       newdata)
+#     beta <- fixef(model) ## fixed-effects coefficients
+#     V <- vcov(model)     ## variance-covariance matrix of beta
+#     pred.se <- sqrt(diag(X %*% V %*% t(X))) ## std errors of predictions
+#     ## inverse-link (logistic) function: could also use plogis()
+#     linkinv <- model@resp$family$linkinv
+#     ## construct 95% Normal CIs on the link scale and
+#     ##  transform back to the response (probability) scale:
+#     crit <- -qnorm(alpha/2)
+#     linkinv(cbind(lwr=pred0-crit*pred.se,
+#                   upr=pred0+crit*pred.se))
+#   }
+# cpred1.CI <- easyPredCI(cmod_lme4_L,pframe)
 

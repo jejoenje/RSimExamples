@@ -84,3 +84,31 @@ coordinates(mydat) <- c('xc','yc')
 with(mydat, plotvario(variogram(res1 ~ 1, data=mydat)))
 ```
 
+### Mixed-effects data with spatial autocorrelation
+
+We now extend the example above by generating typical "mixed effects data", i.e. by adding a further error term to the data. This extra term $a_{3,j}$ represents extra variation arising from measurements being taking from K distinct groups (e.g. sites or individuals). Thus, now measurement y_{i,j} is measurement i from group j:  
+ 
+$y_{i,j} = b_1 + b_2X_{i,j} + a_{1,i} + a_{2,i} + a_{3,j}$
+ 
+Terms $a_{1,i}$ and $a_{2,i}$ are defined as above, while 
+
+$a_{3,j} \sim N(\mu = 0, \sigma_{g} = 1)$
+
+so that $a_{3,j}$ are the normally distributed group-specific random deviations with standard deviation equal to $\sigma_{g}$. We add these to the above simulated response.
+
+```{r}
+e_g <- 1    # Between-group SD.
+K <- N/25   # So the number of groups K is equal to N/25, with 25 observations per group
+a_3 <- rep(rnorm(K, 0, e_g), each=25)
+mydat$group <- factor(rep(paste('group',1:K,sep=''),each=25))
+mydat$y_i <- b_1 + b_2*mydat$X_i + a_1 + a_2 + a_3
+```
+
+An analysis of this simulated data can (and should) now account for this extra "grouping" error by including a random effect for 'group':
+
+```{r, echo=FALSE, warning=FALSE, results='hide'}
+library(lme4)
+```
+```{r}
+mod2 <- lmer(y_i ~ X_i + (1|group), data=mydat)
+```
